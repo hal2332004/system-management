@@ -1,3 +1,5 @@
-# tourflow
+# TourFlow CRM — Frontend Client
 
-[![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-3414sb2k)
+Ứng dụng giao diện người dùng (Single Page Application) cho hệ thống **TourFlow CRM**, xây dựng bằng React 18, TypeScript, Vite và Recharts.
+
+Xem tài liệu đầy đủ tại [README chính của dự án](../README.md).
