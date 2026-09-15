@@ -1,111 +1,201 @@
-# TourFlow CRM — Hệ Thống Quản Lý Đơn Tour
+# TourFlow CRM — Hệ Thống Quản Lý & Điều Hành Đơn Tour Du Lịch
 
-**TourFlow CRM** là giải pháp phần mềm quản lý bán hàng và điều hành đơn tour du lịch nội bộ, được thiết kế chuyên biệt cho đội ngũ **Nhân viên Sale (Saler)** và **Quản trị viên (Admin)**.
+<p align="center">
+  <strong>Giải pháp quản trị bán hàng, điều hành tour và đo lường hiệu suất nhân viên toàn diện dành cho doanh nghiệp du lịch nội bộ.</strong>
+</p>
 
-Hệ thống cung cấp trải nghiệm làm việc mượt mà, phân quyền bảo mật chặt chẽ ở cấp độ cơ sở dữ liệu (Row-Level Security), hỗ trợ chế độ giao diện Sáng / Tối (Light/Dark Mode), cùng hệ thống lọc đơn và báo cáo hiệu suất trực quan theo thời gian thực.
+<p align="center">
+  <img src="https://img.shields.io/badge/React-18.3.1-61DAFB?logo=react&logoColor=black" alt="React" />
+  <img src="https://img.shields.io/badge/TypeScript-5.5.3-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Vite-5.4.2-646CFF?logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/Supabase-PostgreSQL_15-3ECF8E?logo=supabase&logoColor=white" alt="Supabase" />
+  <img src="https://img.shields.io/badge/Recharts-2.x-8884d8" alt="Recharts" />
+  <img src="https://img.shields.io/badge/Security-RLS_Protected-orange" alt="RLS" />
+  <img src="https://img.shields.io/badge/Theme-Dark%20%2F%20Light-blue" alt="Theme" />
+</p>
 
 ---
 
 ## 📑 Mục lục
 
-1. [Kiến trúc & Công nghệ](#kiến-trúc--công-nghệ)
-2. [Phân quyền Người dùng (User Roles)](#phân-quyền-người-dùng-user-roles)
-3. [Tính năng Cốt lõi (Core Features)](#tính-năng-cốt-lõi-core-features)
-4. [Bảo mật & Phân quyền Dữ liệu (Database RLS)](#bảo-mật--phân-quyền-dữ-liệu-database-rls)
-5. [Cơ chế Xác thực & Quản lý Mật khẩu](#cơ-chế-xác-thực--quản-lý-mật-khẩu)
-6. [Hệ thống Màn hình Giao diện (UI Screens)](#hệ-thống-màn-hình-giao-diện-ui-screens)
-7. [Hướng dẫn Cài đặt & Triển khai](#hướng-dẫn-cài-đặt--triển-khai)
+1. [Giới thiệu Tổng quan](#-giới-thiệu-tổng-quan)
+2. [Kiến trúc & Công nghệ](#-kiến-trúc--công-nghệ)
+3. [Phân quyền Người dùng (RBAC Matrix)](#-phân-quyền-người-dùng-rbac-matrix)
+4. [Tính năng Nổi bật](#-tính-năng-nổi-bật)
+   - [4.1. Dashboard Quản trị & Hiệu suất Saler (Recharts)](#41-dashboard-quản-trị--hiệu-suất-saler-recharts)
+   - [4.2. Quản lý Đơn Tour Nâng cao](#42-quản-lý-đơn-tour-nâng-cao)
+   - [4.3. Quản lý Danh mục Tour & Loại Phòng](#43-quản-lý-danh-mục-tour--loại-phòng)
+   - [4.4. Chuông Thông báo Thời gian thực (Realtime)](#44-chuông-thông-báo-thời-gian-thực-realtime)
+   - [4.5. Quản lý Đội ngũ Nhân viên Sale](#45-quản-lý-đội-ngũ-nhân-viên-sale)
+   - [4.6. Hồ sơ Cá nhân & Upload Avatar](#46-hồ-sơ-cá-nhân--upload-avatar)
+   - [4.7. Quản lý Mật khẩu Hai Luồng](#47-quản-lý-mật-khẩu-hai-luồng)
+   - [4.8. Tối ưu Trải nghiệm Mobile & Đa Giao diện (Dark / Light)](#48-tối-ưu-trải-nghiệm-mobile--đa-giao-diện-dark--light)
+5. [Cơ sở Dữ liệu & Chính sách Bảo mật (RLS)](#-cơ-sở-dữ-liệu--chính-sách-bảo-mật-rls)
+6. [Cấu trúc Thư mục Dự án](#-cấu-trúc-thư-mục-dự-án)
+7. [Hướng dẫn Cài đặt & Khởi chạy](#-hướng-dẫn-cài-đặt--khởi-chạy)
+
+---
+
+## 🌟 Giới thiệu Tổng quan
+
+**TourFlow CRM** là giải pháp phần mềm quản lý đơn tour du lịch và đo lường hiệu suất bán hàng được thiết kế dành riêng cho đội ngũ **Nhân viên Sale (Saler)** và **Ban Quản trị (Admin)**.
+
+Hệ thống giải quyết triệt để các vấn đề:
+- **Tập trung hóa dữ liệu tour:** Loại bỏ việc theo dõi đơn lẻ tẻ qua file Excel hay tin nhắn mạng xã hội.
+- **Bảo vệ dữ liệu khách hàng tuyệt đối:** Cơ chế cách ly dữ liệu tại tầng Database (**PostgreSQL Row Level Security**), Saler chỉ nhìn thấy và xử lý đơn do chính mình tạo ra.
+- **Tra cứu và đối soát linh hoạt:** Lọc đa chiều theo cả hai mốc: Ngày đặt đơn (đối soát hoa hồng sale) và Ngày đi tour (điều hành dịch vụ).
+- **Trực quan hóa chỉ số với Recharts:** Theo dõi hiệu suất từng Saler, tỷ lệ chốt đơn (Conversion Rate) và phân bổ trạng thái đơn tour theo thời gian thực.
+- **Tương thích toàn diện:** Trải nghiệm mượt mà trên cả Desktop lẫn Mobile với hệ thống theme Sáng / Tối thông minh.
 
 ---
 
 ## 🛠 Kiến trúc & Công nghệ
 
-| Thành phần | Công nghệ / Nền tảng | Chi tiết |
-|------------|----------------------|----------|
-| **Frontend Framework** | React 18 + TypeScript | SPA nhanh, an toàn kiểu dữ liệu |
-| **Build Tool & Bundler** | Vite | Tối ưu hóa build bundle, HMR cực nhanh |
-| **Routing** | React Router v6 | Quản lý điều hướng client-side và Protected Routes |
-| **Styling** | Vanilla CSS + CSS Variables | Hỗ trợ Light / Dark Mode tức thì, responsive đa thiết bị |
-| **Icons** | Lucide React | Bộ icon hiện đại, tối giản |
-| **Backend & Database** | Supabase (PostgreSQL 15) | Database quan hệ, Auth, Trigger, RPC |
-| **Bảo mật dữ liệu** | Row Level Security (RLS) | Bảo vệ và cách ly dữ liệu trực tiếp tại PostgreSQL |
+### Tech Stack Chi tiết
 
-### Sơ đồ luồng kiến trúc
+| Tầng | Công nghệ | Mục đích sử dụng |
+| :--- | :--- | :--- |
+| **Frontend Core** | **React 18** + **TypeScript** | Xây dựng Single Page Application an toàn kiểu dữ liệu, độ phản hồi cao |
+| **Build Tool** | **Vite** | Build bundle nhanh, tối ưu hóa asset và Hot Module Replacement (HMR) |
+| **Routing** | **React Router DOM v7** | Điều hướng SPA, quản lý Protected Routes và Role Redirects |
+| **Charts & Visualization** | **Recharts** | Vẽ biểu đồ cột tương tác cao, responsive, bo góc mượt mà, tooltip theo theme |
+| **Icons & UI** | **Lucide React** | Hệ thống biểu tượng giao diện hiện đại, sắc nét |
+| **Styling** | **Vanilla CSS + CSS Variables** | Quản lý Design Tokens (Dark / Light theme), không phụ thuộc framework CSS nặng |
+| **Backend & BaaS** | **Supabase** | Nền tảng Authentication, PostgreSQL Database, Storage Bucket và Postgres Realtime Channels |
+| **Cơ sở dữ liệu** | **PostgreSQL 15** | RLS Policies, Stored Functions, Database Triggers, Foreign Keys |
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                   Trình duyệt (Client)                   │
-│         React 18 + TypeScript + CSS Variables            │
-│         (Hỗ trợ Light Mode & Dark Mode tức thì)          │
-└────────────┬─────────────────────────────────────────────┘
-             │ 
-             │ REST API / WebSockets (Supabase JS Client)
-             ▼
-┌──────────────────────────────────────────────────────────┐
-│                     Supabase BaaS                        │
-│  ├── Supabase Auth (Đăng nhập, Session, Recovery Token)  │
-│  ├── PostgreSQL Database                                 │
-│  │    ├── profiles (Thông tin nhân viên, vai trò, khóa)  │
-│  │    ├── orders (Đơn tour, ngày đặt, ngày tour, status) │
-│  │    └── activity_logs (Nhật ký hành động hệ thống)     │
-│  └── Row Level Security (RLS Policies)                   │
-│       ├── Kiểm tra quyền Admin / Saler                   │
-│       ├── Kiểm tra trạng thái is_active                  │
-│       └── Cách ly đơn tour theo owner_id                 │
-└──────────────────────────────────────────────────────────┘
+### Sơ đồ Luồng Kiến trúc (Architecture Workflow)
+
+```mermaid
+graph TD
+    Client["Trình duyệt Client (React 18 + TS + Recharts)"]
+    Auth["Supabase Auth (JWT / Session)"]
+    DB[("PostgreSQL 15 Database (Supabase)")]
+    Storage["Supabase Storage ('avatars' bucket)"]
+    Realtime["Supabase Realtime (WebSocket)"]
+
+    Client -->|Xác thực / Đăng nhập| Auth
+    Client -->|Truy vấn dữ liệu (Orders, Profiles, Tours)| DB
+    Client -->|Tải lên ảnh đại diện| Storage
+    DB -->|Bảo vệ dữ liệu| RLS["Row Level Security (RLS)"]
+    DB -->|Bắn sự kiện thay đổi| Realtime
+    Realtime -->|Cập nhật tức thì| Client
 ```
 
 ---
 
-## 👥 Phân quyền Người dùng (User Roles)
+## 👥 Phân quyền Người dùng (RBAC Matrix)
 
-Hệ thống phân cấp 2 nhóm người dùng với ranh giới trách nhiệm và quyền hạn rõ ràng:
+Hệ thống phân chia ranh giới quyền hạn nghiêm ngặt giữa hai vai trò:
 
-### 1. Nhân viên Sale (`saler`)
-- **Tạo đơn tour:** Nhập khách hàng, SĐT, email, tên tour, ngày đặt, ngày đi tour, trạng thái, ghi chú.
-- **Quản lý đơn cá nhân:** Xem danh sách, tìm kiếm, lọc đơn do chính mình tạo.
-- **Chỉnh sửa đơn của mình:** Cập nhật thông tin khách hàng, ngày đi tour, trạng thái tour.
-- **Quyền xóa đơn tour của mình:** Nhân viên Sale có toàn quyền xóa các đơn tour do chính mình sở hữu khi có yêu cầu hủy hoặc dọn dẹp dữ liệu rác (hệ thống có cảnh báo xác nhận trước khi xóa).
-- **Cách ly dữ liệu:** Không thể xem, chỉnh sửa hoặc xóa đơn tour của nhân viên Sale khác.
-
-### 2. Quản trị viên (`admin`)
-- **Bảng điều khiển (Dashboard):** Xem tổng quan 4 chỉ số KPI, biểu đồ phân bổ trạng thái và biểu đồ xu hướng đơn tour toàn doanh nghiệp.
-- **Quản lý toàn bộ đơn tour:** Xem, tìm kiếm theo nhân viên phụ trách, lọc đa tiêu chí, chỉnh sửa hoặc xóa bất kỳ đơn tour nào.
-- **Quản lý đội ngũ Sale:** Tạo tài khoản mới (tự sinh username chuẩn hóa), kích hoạt / tạm khóa tài khoản nhân viên, đổi mật khẩu cho nhân viên.
-- **Nhật ký hệ thống:** Theo dõi toàn bộ hoạt động đăng nhập, tạo/sửa đơn tour theo thời gian thực.
-
----
-
-## 🚀 Tính năng Cốt lõi (Core Features)
-
-### 1. Giao diện Đa chế độ (Light & Dark Theme)
-- Chuyển đổi linh hoạt giữa giao diện Tối (Dark Navy) và giao diện Sáng (Slate Crisp Clean).
-- Nút bấm biểu tượng **Mặt trời (Sun ☀️) / Mặt trăng (Moon 🌙)** hiển thị cố định ngay trên thanh **Topbar** đầu trang và trong menu tài khoản.
-- Tự động ghi nhớ tùy chọn vào `localStorage`.
-
-### 2. Thanh điều hướng thông minh (Sticky Layout)
-- **Sidebar ghim cố định (`position: sticky; height: 100vh;`):** Menu bên trái không bị trôi khi cuộn xem danh sách dài.
-- **Huy hiệu Admin / Sale trên Topbar:** Hiển thị tên tài khoản và vai trò (`Admin System · Quản trị viên`) ngay góc trên cùng bên phải, không cần cuộn trang để tìm.
-
-### 3. Bộ lọc Đơn tour Nâng cao (Advanced Filtering)
-- **Tìm kiếm đa trường:** Tên khách hàng, Số điện thoại, Email, Tên tour, Nhân viên phụ trách (dành cho Admin).
-- **Lọc theo loại ngày:** Tùy chọn lọc theo **Ngày đặt** (Booking Date) hoặc **Ngày đi tour** (Tour Date).
-- **Khoảng thời gian nhanh:** Hôm nay, Hôm qua, 7 ngày qua, 30 ngày qua, Tháng này, Tháng trước.
-- **Chọn ngày cụ thể (Calendar Picker):** Chọn chính xác 1 ngày bất kỳ trong quá khứ hoặc tương lai, tự động xóa tiêu chí cũ khi chọn bộ lọc khác.
-
-### 4. Quyền Xóa Đơn Tour Cho Saler
-- Saler có quyền xóa đơn tour của chính mình tại trang danh sách và trang chi tiết đơn.
-- Tích hợp hộp thoại xác nhận an toàn trước khi xóa.
-- Được bảo vệ bằng chính sách RLS ở tầng database (chỉ xóa được nếu `auth.uid() = owner_id`).
+| Chức năng / Quyền hạn | Saler (`saler`) | Admin (`admin`) | Ghi chú bảo mật |
+| :--- | :---: | :---: | :--- |
+| **Đăng nhập hệ thống** | ✅ | ✅ | Hỗ trợ đăng nhập qua Username hoặc Email |
+| **Đổi mật khẩu cá nhân** | ✅ | ✅ | Yêu cầu xác thực mật khẩu cũ |
+| **Quên / Đặt lại mật khẩu** | ✅ | ✅ | Nhận liên kết khôi phục qua Email |
+| **Xem Hồ sơ & Đổi Avatar** | ✅ | ✅ | Upload ảnh cá nhân lên Supabase Storage |
+| **Xem chuông thông báo Realtime** | ✅ | ✅ | Lắng nghe hoạt động liên quan đến đơn tour |
+| **Tạo mới đơn tour** | ✅ | ✅ | Tự động gắn `owner_id` là user đang tạo đơn |
+| **Xem danh sách đơn tour** | ✅ *(Chỉ đơn của mình)* | ✅ *(Toàn bộ đơn)* | Được bảo vệ bởi RLS ở cấp database |
+| **Tìm kiếm & Lọc đơn nâng cao** | ✅ | ✅ | Lọc theo ngày đặt, ngày tour, trạng thái, Saler |
+| **Chỉnh sửa đơn tour** | ✅ *(Chỉ đơn của mình)* | ✅ *(Toàn bộ đơn)* | Giữ nguyên `owner_id` gốc khi sửa |
+| **Xóa đơn tour** | ✅ *(Chỉ đơn của mình)* | ✅ *(Toàn bộ đơn)* | Có hộp thoại xác nhận an toàn |
+| **Dashboard Tổng quan & Recharts** | ❌ | ✅ | Thống kê KPI, biểu đồ trạng thái & hiệu suất Saler |
+| **Quản trị Nhân viên Sale** | ❌ | ✅ | Tạo mới, khóa/mở khóa (`is_active`), cấp lại mật khẩu |
+| **Quản trị Danh mục Tours & Phòng**| ❌ | ✅ | Thêm, sửa, bật/tắt tour và loại phòng |
+| **Xem Nhật ký Hệ thống (Activity)** | ❌ | ✅ | Giám sát toàn bộ thao tác theo thời gian thực |
 
 ---
 
-## 🔒 Bảo mật & Phân quyền Dữ liệu (Database RLS)
+## 🚀 Tính năng Nổi bật
 
-Toàn bộ logic bảo mật được thực thi bằng **Row Level Security (RLS)** trên PostgreSQL, ngăn chặn can thiệp trái phép ngay cả khi gọi trực tiếp qua API:
+### 4.1. Dashboard Quản trị & Hiệu suất Saler (Recharts)
+Dành riêng cho Quản trị viên để nắm bắt tình hình kinh doanh trong tích tắc:
+- **4 thẻ chỉ số KPI tổng hợp:**
+  - Tổng số đơn tour toàn hệ thống.
+  - Số đơn đang trong giai đoạn tư vấn.
+  - Số đơn đã chốt thành công.
+  - Tỷ lệ chốt đơn trung bình (`(Đã chốt / Tổng đơn) * 100%`).
+- **Thẻ Đơn theo trạng thái:** Phân bổ toàn bộ đơn dạng thanh tiến trình trực quan.
+- **Thẻ Hiệu suất Saler hiện đại (Tích hợp Recharts Bar Chart):**
+  - **Bộ lọc đôi linh hoạt:**
+    - `[Chọn nhân viên ▼]`: Lọc xem "Tất cả nhân viên" hoặc chọn riêng từng nhân viên Saler.
+    - `[Khoảng thời gian ▼]`: Lọc xem 7 ngày qua, 14 ngày qua, 30 ngày qua hoặc Tất cả.
+  - **4 Chip trạng thái kèm tỷ lệ:** Mới, Đang tư vấn, Đã chốt, Đã hủy kèm số lượng và tỷ lệ `%`.
+  - **Biểu đồ cột (Bar Chart):** Cột bo góc nhẹ `radius={[6, 6, 0, 0]}`, màu nhận diện chuẩn từng trạng thái, hiển thị custom tooltip khi hover (Dark/Light mode) và empty state khi không có dữ liệu.
+  - **Tự động đồng bộ Realtime:** Tự cập nhật lại biểu đồ khi có đơn mới hoặc trạng thái đơn thay đổi.
+
+### 4.2. Quản lý Đơn Tour Nâng cao
+- **Thông tin đơn đầy đủ:** Khách hàng (Tên, SĐT, Email), Chọn tour từ danh mục, Loại phòng (`room_type`), Số lượng khách (`num_guests`), Mức độ đánh giá chất lượng (`rating` từ 1 đến 5 sao với component `StarRating`), Ghi chú tour.
+- **Bộ lọc thời gian kép (Date Range Selector):**
+  - Chuyển đổi linh hoạt giữa lọc theo **Ngày đặt tour (Booking Date)** hoặc **Ngày đi tour (Tour Date)**.
+  - Các mốc chọn nhanh: Hôm nay, Hôm qua, 7 ngày qua, 30 ngày qua, Tháng này, Tháng trước.
+  - Lịch chọn ngày cụ thể (Specific Date Picker).
+- **Quyền xóa an toàn:** Cả Saler và Admin đều có thể xóa đơn của mình khi có sự cố, hệ thống yêu cầu xác nhận trước khi thực hiện để chống thao tác nhầm.
+
+### 4.3. Quản lý Danh mục Tour & Loại Phòng
+Truy cập tại `/admin/settings` (dành cho Admin):
+- **Danh mục Tours:**
+  - Tích hợp sẵn danh sách hơn 22 tour phổ biến (Việt Nam, Thái Lan, Bali, Campuchia...).
+  - Thêm mới tour, chỉnh sửa tên tour.
+  - Bật / tắt trạng thái hoạt động (`is_active`).
+- **Danh mục Loại phòng (Room Types):**
+  - Quản lý các loại phòng: Phòng đơn, Phòng đôi, Twin, Triple, Family Suite, Villa...
+  - Hỗ trợ bật/tắt hoặc thêm mới loại phòng nhanh chóng.
+
+### 4.4. Chuông Thông báo Thời gian thực (Realtime)
+- Tích hợp component `NotificationBell` góc trên bên phải màn hình.
+- Lắng nghe sự kiện qua WebSocket (Supabase Realtime) trên bảng `activity_logs`.
+- Hiển thị badge số lượng thông báo chưa đọc, tự động phát tín hiệu khi có đơn mới được tạo hoặc cập nhật trạng thái.
+- Hỗ trợ đánh dấu đọc từng thông báo hoặc "Đọc tất cả".
+
+### 4.5. Quản lý Đội ngũ Nhân viên Sale
+Truy cập tại `/admin/salers`:
+- **Tạo nhân viên mới:** Admin nhập Họ tên và Email; hệ thống tự động chuẩn hóa tiếng Việt không dấu và sinh username kèm hậu tố ngẫu nhiên (ví dụ: `nguyen.van.an.7k2a`).
+- **Khóa / Mở khóa tài khoản (`is_active`):** Khi tài khoản bị khóa, nhân viên sẽ lập tức bị đăng xuất và không thể truy cập hệ thống.
+- **Cấp lại mật khẩu trực tiếp:** Admin có thể đặt lại mật khẩu mới cho nhân viên ngay trên giao diện quản trị.
+
+### 4.6. Hồ sơ Cá nhân & Upload Avatar
+Truy cập tại `/profile`:
+- Xem thông tin tài khoản, vai trò, ngày tham gia.
+- Cập nhật tên hiển thị (`display_name`).
+- Upload ảnh đại diện trực tiếp lên Supabase Storage bucket `avatars`, tự động tối ưu hóa kích thước và hiển thị với avatar fallback viết tắt tên khi chưa có ảnh.
+
+### 4.7. Quản lý Mật khẩu Hai Luồng
+- **Đổi mật khẩu khi đang đăng nhập (`/settings/change-password`):** Yêu cầu nhập đúng mật khẩu hiện tại, sau đó nhập mật khẩu mới và xác nhận.
+- **Khôi phục mật khẩu khi quên (`/forgot-password` → `/reset-password`):** Nhập email đăng ký để nhận liên kết xác thực chứa token từ Supabase, sau đó đặt lại mật khẩu mới an toàn.
+
+### 4.8. Tối ưu Trải nghiệm Mobile & Đa Giao diện (Dark / Light)
+- **Hệ thống theme Sáng / Tối:** Chuyển đổi chỉ với 1 click bằng nút bấm ☀️/🌙 cố định trên Topbar, tự động ghi nhớ tùy chọn vào `localStorage`.
+- **Drawer Menu Mobile:** Trên màn hình điện thoại, Sidebar chuyển thành Drawer trượt từ bên trái với lớp phủ mờ (backdrop-blur). Click bên ngoài hoặc click vào menu sẽ tự động thu gọn.
+- **Bảng cuộn ngang mượt mà:** Bảng dữ liệu hỗ trợ cuộn ngang linh hoạt, không bị vỡ bố cục trên màn hình nhỏ.
+
+---
+
+## 🔒 Cơ sở Dữ liệu & Chính sách Bảo mật (RLS)
+
+Hệ thống lưu trữ trên **PostgreSQL 15** và thực thi chính sách bảo mật đa lớp:
+
+### 1. Các bảng chính trong hệ thống
+
+| Bảng | Chức năng chính | Cột quan trọng |
+| :--- | :--- | :--- |
+| `profiles` | Hồ sơ người dùng, phân quyền | `id`, `username`, `display_name`, `email`, `role` (`admin` / `saler`), `is_active`, `avatar_url` |
+| `orders` | Đơn tour du lịch | `id`, `order_code`, `owner_id`, `customer_name`, `customer_phone`, `tour_name`, `booking_date`, `tour_date`, `status`, `room_type`, `num_guests`, `rating`, `notes` |
+| `tours` | Danh mục chương trình tour | `id`, `name`, `is_active` |
+| `room_types` | Danh mục loại phòng | `id`, `name`, `is_active` |
+| `activity_logs` | Nhật ký thao tác hệ thống | `id`, `actor_id`, `target_user_id`, `action_type`, `description`, `created_at` |
+
+**4 trạng thái đơn tour (`order_status`):**
+- `'new'`: Mới tiếp nhận
+- `'consulting'`: Đang tư vấn
+- `'closed'`: Đã chốt thành công
+- `'cancelled'`: Đã hủy đơn
+
+### 2. Ví dụ chính sách Row Level Security (RLS)
 
 ```sql
--- Saler chỉ xem được đơn của mình và khi tài khoản đang hoạt động
+-- Saler chỉ có quyền xem đơn do mình phụ trách và khi tài khoản đang mở
 CREATE POLICY "Salers can view their own orders" ON public.orders
   FOR SELECT USING (auth.uid() = owner_id AND public.is_my_account_active());
 
@@ -113,11 +203,11 @@ CREATE POLICY "Salers can view their own orders" ON public.orders
 CREATE POLICY "Salers can insert their own orders" ON public.orders
   FOR INSERT WITH CHECK (auth.uid() = owner_id AND public.is_my_account_active());
 
--- Saler chỉ cập nhật được đơn của mình
+-- Saler chỉ chỉnh sửa đơn của chính mình
 CREATE POLICY "Salers can update their own orders" ON public.orders
   FOR UPDATE USING (auth.uid() = owner_id AND public.is_my_account_active());
 
--- Saler có quyền xóa đơn của chính mình
+-- Saler chỉ xóa được đơn của chính mình
 CREATE POLICY "Salers can delete their own orders" ON public.orders
   FOR DELETE USING (auth.uid() = owner_id AND public.is_my_account_active());
 
@@ -128,74 +218,115 @@ CREATE POLICY "Admins can do everything on orders" ON public.orders
 
 ---
 
-## 🔐 Cơ chế Xác thực & Quản lý Mật khẩu
+## 📂 Cấu trúc Thư mục Dự án
 
-Hệ thống tách biệt rõ ràng 2 luồng quản lý mật khẩu:
-
-| Tiêu chí | Đổi mật khẩu (Settings) | Đặt lại mật khẩu (Forgot Password) |
-|----------|-------------------------|-----------------------------------|
-| **Ngữ cảnh** | Người dùng đang đăng nhập trong hệ thống | Người dùng quên mật khẩu, không thể đăng nhập |
-| **Đường dẫn** | `/settings/change-password` | `/forgot-password` → `/reset-password` |
-| **Cơ chế xác thực** | Yêu cầu nhập đúng Mật khẩu hiện tại | Nhận email chứa Token Recovery từ Supabase |
-| **Số trường nhập** | 3 ô (Mật khẩu cũ, Mật khẩu mới, Xác nhận) | 2 ô (Mật khẩu mới, Xác nhận mật khẩu mới) |
+```
+system-management/
+├── PRD.md                         # Tài liệu đặc tả yêu cầu sản phẩm
+├── README.md                      # Hướng dẫn và tài liệu dự án
+├── UI requirement.md              # Yêu cầu chi tiết về giao diện UI/UX
+└── frontend/                      # Ứng dụng Frontend React + Vite
+    ├── index.html                 # Entry point HTML
+    ├── package.json               # Danh sách thư viện & scripts
+    ├── tsconfig.json              # Cấu hình TypeScript
+    ├── vite.config.ts             # Cấu hình Vite bundler
+    ├── scripts/                   # Scripts quản lý và migration DB
+    │   ├── run-migration.js       # Chạy migration database chính
+    │   ├── add-delete-policy.js   # Bổ sung policy xóa đơn cho Saler
+    │   ├── check-db.js            # Kiểm tra kết nối cơ sở dữ liệu
+    │   └── fix-trigger.js         # Cập nhật triggers và stored procedures
+    ├── supabase/                  # Các file SQL schema và migration
+    │   └── migrations/
+    │       ├── 20260909100000_tourflow_schema.sql
+    │       ├── 20260915110000_realtime_notifications.sql
+    │       ├── 20260915130000_profile_avatar.sql
+    │       ├── 20260915140000_allow_read_profiles.sql
+    │       ├── 20260915150000_tours_and_room_types.sql
+    │       ├── 20260915160000_add_guests_and_rating.sql
+    │       ├── 20260915170000_update_order_statuses.sql
+    │       └── reset_admin.sql
+    └── src/
+        ├── App.tsx                # Toàn bộ logic Routes, Views, Dashboard & Recharts
+        ├── index.css              # Hệ thống Design Tokens, Dark/Light theme & CSS
+        ├── main.tsx               # Khởi tạo React DOM
+        ├── types.ts               # Khai báo kiểu dữ liệu TypeScript (Order, Profile, Tour...)
+        ├── lib/
+        │   └── supabase.ts        # Cấu hình kết nối Supabase Client & Admin Client
+        └── components/            # Các component độc lập
+            ├── AdminSettingsPage.tsx # Màn hình quản trị Tours & Loại phòng
+            ├── Avatar.tsx            # Component ảnh đại diện & fallback
+            ├── NotificationBell.tsx  # Chuông thông báo Realtime
+            ├── ProfilePage.tsx       # Trang hồ sơ cá nhân & upload avatar
+            └── StarRating.tsx        # Đánh giá độ ưu tiên đơn (1 - 5 sao)
+```
 
 ---
 
-## 🖥 Hệ thống Màn hình Giao diện (UI Screens)
+## 💻 Hướng dẫn Cài đặt & Khởi chạy
 
-| Đường dẫn | Tên màn hình | Đối tượng | Mô tả |
-|-----------|--------------|-----------|-------|
-| `/login` | Đăng nhập | Tất cả | Đăng nhập bằng username/email + mật khẩu |
-| `/forgot-password` | Quên mật khẩu | Tất cả | Nhập email nhận link đặt lại mật khẩu |
-| `/reset-password` | Đặt mật khẩu mới | Tất cả | Đặt lại mật khẩu qua liên kết xác thực email |
-| `/dashboard` | Bảng điều khiển | Admin | 4 thẻ KPI, biểu đồ trạng thái, biểu đồ xu hướng |
-| `/admin/orders` | Tất cả đơn tour | Admin | Bảng quản lý toàn bộ đơn tour, bộ lọc đa năng |
-| `/orders` | Đơn tour của tôi | Saler | Quản lý, lọc, xem, sửa và xóa đơn của chính mình |
-| `/orders/new` | Tạo đơn mới | Saler | Form nhập thông tin khách và đơn tour |
-| `/orders/:id` | Chi tiết đơn | Cả hai | Xem thông tin chi tiết, chỉnh sửa hoặc xóa đơn |
-| `/orders/:id/edit`| Chỉnh sửa đơn | Cả hai | Cập nhật thông tin đơn tour |
-| `/admin/salers` | Nhân viên Sale | Admin | Quản lý danh sách, tạo mới, khóa, đổi mật khẩu Sale |
-| `/admin/activity` | Hoạt động hệ thống | Admin | Nhật ký thao tác real-time của toàn đội ngũ |
-| `/settings/change-password` | Đổi mật khẩu | Cả hai | Cập nhật mật khẩu cá nhân khi đang đăng nhập |
+### 1. Yêu cầu Tiên quyết
+- **Node.js**: Phiên bản 18.0.0 trở lên.
+- **npm** hoặc **yarn**.
+- Một dự án [Supabase](https://supabase.com) (hoặc máy chủ PostgreSQL có hỗ trợ extension `uuid-ossp`).
 
----
-
-## 📦 Hướng dẫn Cài đặt & Triển khai
-
-### 1. Yêu cầu môi trường
-- Node.js >= 18.0.0
-- npm hoặc yarn
-- Tài khoản [Supabase](https://supabase.com)
-
-### 2. Cài đặt mã nguồn
+### 2. Cài đặt Mã nguồn
 ```bash
-# Di chuyển vào thư mục frontend
-cd frontend
+# 1. Clone repository về máy
+git clone https://github.com/hal2332004/system-management.git
+cd system-management/frontend
 
-# Cài đặt các gói phụ thuộc
+# 2. Cài đặt các dependencies
 npm install
 ```
 
-### 3. Cấu hình biến môi trường
-Tạo file `.env` tại thư mục `frontend/` với nội dung:
+### 3. Cấu hình Biến Môi trường
+Tạo file `.env` tại thư mục `frontend/` với các thông số kết nối:
+
 ```env
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-DATABASE_URL=postgres://postgres:[password]@[host]:5432/postgres
+# URL và Public Anon Key của dự án Supabase
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+
+# Service Role Key (tùy chọn cho thao tác admin nâng cao)
+VITE_SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+
+# Chuỗi kết nối PostgreSQL trực tiếp (Dùng khi chạy migrations qua Node script)
+DATABASE_URL=postgres://postgres:[YOUR-PASSWORD]@[YOUR-HOST]:5432/postgres
 ```
 
-### 4. Chạy migration cơ sở dữ liệu
+### 4. Chạy Migration Cơ sở Dữ liệu
 ```bash
-# Khởi tạo bảng, RLS policies, triggers và tài khoản admin mặc định
-node scripts/run-migration.js
+# Khởi tạo bảng, RLS policies, triggers và dữ liệu mẫu
+npm run db:migrate
 
-# Hoặc áp dụng policy xóa đơn cho Saler
-node scripts/add-delete-policy.js
+# Thiết lập lại tài khoản admin mặc định (nếu cần)
+npm run db:reset
 ```
 
-### 5. Khởi chạy môi trường phát triển
+### 5. Khởi chạy Ứng dụng
+
 ```bash
+# Chạy máy chủ phát triển (Development mode)
 npm run dev
+
+# Kiểm tra an toàn kiểu dữ liệu (TypeScript typecheck)
+npm run typecheck
+
+# Đóng gói sản phẩm (Production build)
+npm run build
 ```
-Ứng dụng sẽ chạy tại địa chỉ: `http://localhost:5173`
-- Tài khoản quản trị mặc định: `admin` / `password123`
+
+Ứng dụng sẽ chạy tại địa chỉ: **`http://localhost:5173`**
+
+### 6. Tài khoản Mặc định để Trải nghiệm
+- **Tài khoản Quản trị viên (Admin):**
+  - Tên đăng nhập: `admin`
+  - Mật khẩu: `password123`
+- **Tài khoản Nhân viên Sale (Saler):**
+  - Có thể tạo thêm nhanh chóng từ trang Quản lý Nhân viên của Admin (`/admin/salers`).
+
+---
+
+<p align="center">
+  <sub>TourFlow CRM © 2026 · Phát triển cho giải pháp quản trị du lịch nội bộ chuyên nghiệp.</sub>
+</p>

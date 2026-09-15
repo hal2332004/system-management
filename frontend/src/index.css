@@ -2366,8 +2366,186 @@ input[type=number] {
   }
 }
 
+/* ── HIỆU SUẤT SALER DASHBOARD CARD ──────────────────────────────────── */
+.saler-perf-card {
+  display: flex;
+  flex-direction: column;
+}
 
+.saler-perf-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
 
+.saler-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
 
+.saler-select {
+  max-width: 170px;
+}
 
+.conversion-highlight {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+}
 
+.saler-metric-pills {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.saler-metric-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  font-size: 11px;
+  transition: all 0.2s ease;
+}
+
+.saler-metric-pill:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-input);
+}
+
+.saler-metric-pill .pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.saler-metric-pill .pill-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.saler-metric-pill .pill-count {
+  color: var(--text-heading);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.saler-metric-pill .pill-percent {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.saler-chart-container {
+  height: 195px;
+  width: 100%;
+  position: relative;
+  margin-top: 4px;
+}
+
+.saler-chart-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-card-alt);
+  padding: 18px;
+  text-align: center;
+}
+
+.saler-chart-empty svg {
+  color: var(--text-dim);
+  opacity: 0.6;
+}
+
+.saler-chart-tooltip {
+  background: var(--bg-dropdown);
+  border: 1px solid var(--border-dropdown);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 135px;
+  backdrop-filter: blur(8px);
+  z-index: 50;
+}
+
+.saler-chart-tooltip .tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--text-heading);
+  margin-bottom: 7px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-row);
+  font-weight: 600;
+}
+
+.saler-chart-tooltip .tooltip-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.saler-chart-tooltip .tooltip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.saler-chart-tooltip .tooltip-row b {
+  color: var(--text-heading);
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .saler-perf-heading {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .saler-filters {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+  .saler-filters select {
+    flex: 1;
+    min-width: 0;
+  }
+  .saler-metric-pills {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+  .saler-metric-pill {
+    justify-content: space-between;
+  }
+}

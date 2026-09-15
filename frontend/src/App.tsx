@@ -29,6 +29,16 @@ import {
   useOutletContext,
 } from "react-router-dom";
 import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Cell,
+  CartesianGrid,
+} from "recharts";
+import {
   Activity,
   ArrowLeft,
   ArrowUp,
@@ -2495,13 +2505,73 @@ function OrderDetail() {
   );
 }
 
+function CustomBarTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{
+    payload: { name: string; count: number; percent: number; color: string };
+  }>;
+}) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="saler-chart-tooltip">
+        <div className="tooltip-header">
+          <span className="tooltip-indicator" style={{ background: data.color }} />
+          <strong>{data.name}</strong>
+        </div>
+        <div className="tooltip-row">
+          <span>Số lượng:</span>
+          <b>{data.count} đơn</b>
+        </div>
+        <div className="tooltip-row">
+          <span>Tỷ lệ:</span>
+          <span>{data.percent}%</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
-  useEffect(() => {
+  const [salers, setSalers] = useState<Profile[]>([]);
+  const [selectedSaler, setSelectedSaler] = useState<string>("all");
+  const [timeRange, setTimeRange] = useState<string>("7");
+
+  function loadDashboardData() {
     supabase
       .from("orders")
       .select("*")
       .then(({ data }) => setOrders((data || []) as Order[]));
+
+    supabase
+      .from("profiles")
+      .select("id, display_name, username, role, is_active")
+      .order("display_name", { ascending: true })
+      .then(({ data }) => setSalers((data || []) as Profile[]));
+  }
+
+  useEffect(() => {
+    loadDashboardData();
+
+    const channel = supabase
+      .channel("realtime-dashboard-orders")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => {
+          loadDashboardData();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const counts = Object.keys(statusMeta).map((status) => ({
@@ -2509,6 +2579,65 @@ function Dashboard() {
     count: orders.filter((o) => o.status === status).length,
   }));
   const total = orders.length;
+
+  // Lọc dữ liệu cho thẻ "Hiệu suất Saler"
+  const filteredSalerOrders = useMemo(() => {
+    let list = orders;
+    if (selectedSaler !== "all") {
+      list = list.filter((o) => o.owner_id === selectedSaler);
+    }
+    if (timeRange !== "all") {
+      const days = parseInt(timeRange, 10);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      cutoff.setHours(0, 0, 0, 0);
+      list = list.filter((o) => {
+        const d = new Date(o.created_at || o.booking_date);
+        return d >= cutoff;
+      });
+    }
+    return list;
+  }, [orders, selectedSaler, timeRange]);
+
+  const salerTotal = filteredSalerOrders.length;
+  const salerNew = filteredSalerOrders.filter((o) => o.status === "new").length;
+  const salerConsulting = filteredSalerOrders.filter((o) => o.status === "consulting").length;
+  const salerClosed = filteredSalerOrders.filter((o) => o.status === "closed").length;
+  const salerCancelled = filteredSalerOrders.filter((o) => o.status === "cancelled").length;
+
+  const salerConversionRate =
+    salerTotal > 0 ? Math.round((salerClosed / salerTotal) * 100) : 0;
+
+  const salerChartData = [
+    {
+      key: "new",
+      name: "Mới",
+      count: salerNew,
+      color: "#38bdf8",
+      percent: salerTotal ? Math.round((salerNew / salerTotal) * 100) : 0,
+    },
+    {
+      key: "consulting",
+      name: "Đang tư vấn",
+      count: salerConsulting,
+      color: "#f59e0b",
+      percent: salerTotal ? Math.round((salerConsulting / salerTotal) * 100) : 0,
+    },
+    {
+      key: "closed",
+      name: "Đã chốt",
+      count: salerClosed,
+      color: "#10b981",
+      percent: salerTotal ? Math.round((salerClosed / salerTotal) * 100) : 0,
+    },
+    {
+      key: "cancelled",
+      name: "Đã hủy",
+      count: salerCancelled,
+      color: "#f43f5e",
+      percent: salerTotal ? Math.round((salerCancelled / salerTotal) * 100) : 0,
+    },
+  ];
 
   return (
     <>
@@ -2576,51 +2705,103 @@ function Dashboard() {
             ))}
           </div>
         </Card>
-        <Card>
-          <div className="card-heading-row">
+        <Card className="saler-perf-card">
+          <div className="card-heading-row saler-perf-heading">
             <div>
-              <h2>Xu hướng đơn tour</h2>
-              <p>Trong 7 ngày gần nhất</p>
+              <h2>Hiệu suất Saler</h2>
+              <p>
+                {salerTotal > 0 ? (
+                  <>
+                    Tổng <strong>{salerTotal}</strong> đơn · Tỷ lệ chốt:{" "}
+                    <span className="conversion-highlight">{salerConversionRate}%</span>
+                  </>
+                ) : (
+                  "Thống kê đơn theo nhân viên và trạng thái"
+                )}
+              </p>
             </div>
-            <select className="mini-select">
-              <option>7 ngày</option>
-              <option>30 ngày</option>
-            </select>
+            <div className="saler-filters">
+              <select
+                className="mini-select saler-select"
+                value={selectedSaler}
+                onChange={(e) => setSelectedSaler(e.target.value)}
+                title="Chọn nhân viên cần xem"
+              >
+                <option value="all">Tất cả nhân viên</option>
+                {salers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.display_name || s.username}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="mini-select"
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value)}
+                title="Khoảng thời gian"
+              >
+                <option value="7">7 ngày qua</option>
+                <option value="14">14 ngày qua</option>
+                <option value="30">30 ngày qua</option>
+                <option value="all">Tất cả</option>
+              </select>
+            </div>
           </div>
-          <div className="line-chart">
-            <div className="grid-lines">
-              <i />
-              <i />
-              <i />
-              <i />
-            </div>
-            <svg viewBox="0 0 600 180" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0" stopColor="#60A5FA" stopOpacity=".25" />
-                  <stop offset="1" stopColor="#60A5FA" stopOpacity="0" />
-                </linearGradient>
-              </defs>
-              <path
-                d="M0 145 C45 125, 65 137, 105 112 S165 120, 205 95 S275 119, 315 84 S370 105, 415 72 S475 86, 520 52 S565 62, 600 32 V180 H0Z"
-                fill="url(#chartFill)"
-              />
-              <path
-                d="M0 145 C45 125, 65 137, 105 112 S165 120, 205 95 S275 119, 315 84 S370 105, 415 72 S475 86, 520 52 S565 62, 600 32"
-                fill="none"
-                stroke="#60A5FA"
-                strokeWidth="3"
-              />
-            </svg>
-            <div className="chart-days">
-              <span>T2</span>
-              <span>T3</span>
-              <span>T4</span>
-              <span>T5</span>
-              <span>T6</span>
-              <span>T7</span>
-              <span>CN</span>
-            </div>
+
+          <div className="saler-metric-pills">
+            {salerChartData.map((item) => (
+              <div key={item.key} className="saler-metric-pill">
+                <span className="pill-dot" style={{ background: item.color }} />
+                <span className="pill-label">{item.name}</span>
+                <b className="pill-count">{item.count}</b>
+                <span className="pill-percent">({item.percent}%)</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="saler-chart-container">
+            {salerTotal === 0 ? (
+              <div className="saler-chart-empty">
+                <BarChart3 size={28} />
+                <span>Không có dữ liệu đơn tour trong khoảng thời gian này</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart
+                  data={salerChartData}
+                  margin={{ top: 12, right: 12, left: -24, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="var(--border-subtle)"
+                  />
+                  <XAxis
+                    dataKey="name"
+                    stroke="var(--text-dim)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={{ stroke: "var(--border-subtle)" }}
+                  />
+                  <YAxis
+                    stroke="var(--text-dim)"
+                    fontSize={10}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    content={<CustomBarTooltip />}
+                    cursor={{ fill: "var(--bg-card-hover)", opacity: 0.5 }}
+                  />
+                  <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                    {salerChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </Card>
       </div>
