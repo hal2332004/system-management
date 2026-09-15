@@ -788,6 +788,9 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showDateFilters, setShowDateFilters] = useState(false);
+  const [salers, setSalers] = useState<Profile[]>([]);
+  const [showSalerDropdown, setShowSalerDropdown] = useState(false);
+  const [salerSearchQuery, setSalerSearchQuery] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -806,6 +809,15 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
     }
     const { data } = await request;
     setOrders((data || []) as Order[]);
+
+    if (admin) {
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("display_name", { ascending: true });
+      if (profilesData) setSalers(profilesData as Profile[]);
+    }
+
     setLoading(false);
   }
   useEffect(() => {
@@ -862,12 +874,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
       const matchSaler =
         !admin ||
         !querySaler ||
-        (order.owner?.display_name || "")
-          .toLowerCase()
-          .includes(querySaler.toLowerCase()) ||
-        (order.owner?.username || "")
-          .toLowerCase()
-          .includes(querySaler.toLowerCase());
+        order.owner_id === querySaler;
 
       let matchDate = true;
       if (dateRange !== "all") {
@@ -1002,18 +1009,19 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
       const target = e.target as HTMLElement | null;
-      if (target && !target.closest(".filter-dropdown")) {
+      if (target && !target.closest(".filter-dropdown") && !target.closest(".saler-dropdown")) {
         setShowFilters(false);
         setShowDateFilters(false);
+        setShowSalerDropdown(false);
       }
     }
-    if (showFilters || showDateFilters) {
+    if (showFilters || showDateFilters || showSalerDropdown) {
       document.addEventListener("mousedown", handleOutsideClick);
     }
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
-  }, [showFilters, showDateFilters]);
+  }, [showFilters, showDateFilters, showSalerDropdown]);
 
   return (
     <>
@@ -1059,12 +1067,82 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
               />
             </div>
             {admin && (
-              <div className="search-field">
-                <input
-                  value={querySaler}
-                  onChange={(e) => setQuerySaler(e.target.value)}
-                  placeholder="Nhân viên Sale"
-                />
+              <div className="saler-dropdown" style={{ position: "relative" }}>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setShowSalerDropdown(!showSalerDropdown);
+                    setShowFilters(false);
+                    setShowDateFilters(false);
+                  }}
+                  style={{ minWidth: 200, justifyContent: "space-between" }}
+                >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {querySaler
+                      ? salers.find((s) => s.id === querySaler)?.display_name || "Nhân viên Sale"
+                      : "Tất cả nhân viên Sale"}
+                  </span>
+                  <ChevronDown size={15} />
+                </Button>
+                {showSalerDropdown && (
+                  <div className="dropdown-panel" style={{ minWidth: 250, zIndex: 10, position: 'absolute', top: '100%', marginTop: 8, left: 0 }}>
+                    <div style={{ padding: "8px", borderBottom: "1px solid var(--border)" }}>
+                      <input
+                        type="text"
+                        placeholder="Tìm theo tên/email..."
+                        value={salerSearchQuery}
+                        onChange={(e) => setSalerSearchQuery(e.target.value)}
+                        style={{
+                          width: "100%",
+                          padding: "6px 12px",
+                          borderRadius: "4px",
+                          border: "1px solid var(--border)",
+                          background: "var(--background)",
+                          color: "var(--text)",
+                        }}
+                        autoFocus
+                      />
+                    </div>
+                    <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                      <button
+                        className={!querySaler ? "active" : ""}
+                        onClick={() => {
+                          setQuerySaler("");
+                          setShowSalerDropdown(false);
+                          setSalerSearchQuery("");
+                        }}
+                      >
+                        Tất cả nhân viên Sale
+                      </button>
+                      {salers
+                        .filter(
+                          (s) =>
+                            s.display_name.toLowerCase().includes(salerSearchQuery.toLowerCase()) ||
+                            (s.email && s.email.toLowerCase().includes(salerSearchQuery.toLowerCase()))
+                        )
+                        .map((s) => (
+                          <button
+                            key={s.id}
+                            className={querySaler === s.id ? "active" : ""}
+                            onClick={() => {
+                              setQuerySaler(s.id);
+                              setShowSalerDropdown(false);
+                              setSalerSearchQuery("");
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {s.avatar_url ? (
+                                <img src={s.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
+                              ) : (
+                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--border)' }} />
+                              )}
+                              <span>{s.display_name}</span>
+                            </div>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
