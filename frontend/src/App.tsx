@@ -2,16 +2,20 @@ import { createContext, useContext, FormEvent, ReactNode, useEffect, useMemo, us
 
 const ThemeContext = createContext<{ theme: string; toggleTheme: () => void }>({ theme: 'dark', toggleTheme: () => { } });
 export function useTheme() { return useContext(ThemeContext); }
-import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Activity, ArrowLeft, ArrowUp, ArrowDown, ArrowUpDown, BarChart3, Bell, CalendarDays, Check, ChevronDown, CircleDollarSign, ClipboardList, Eye, FileText, KeyRound, LayoutDashboard, Lock, LogIn, LogOut, Mail, Menu, MoreHorizontal, Pencil, Phone, Plus, Search, Settings, ShieldCheck, Trash2, TrendingUp, User, Users, X, Sun, Moon } from 'lucide-react';
+import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams, useOutletContext } from 'react-router-dom';
+import { Activity, ArrowLeft, ArrowUp, ArrowDown, ArrowUpDown, BarChart3, Bell, CalendarDays, Check, ChevronDown, CircleDollarSign, ClipboardList, ExternalLink, Eye, FileText, KeyRound, LayoutDashboard, Lock, LogIn, LogOut, Mail, Menu, MoreHorizontal, Pencil, Phone, Plus, Search, Settings, ShieldCheck, Star, Trash2, TrendingUp, User, Users, X, Sun, Moon, Compass, BedDouble, Copy, CheckCheck, Clock, PhoneCall, ArrowRight } from 'lucide-react';
 import { supabase, supabaseAdmin } from '@/lib/supabase';
-import type { ActivityLog, Order, OrderStatus, Profile, Role } from '@/types';
+import type { ActivityLog, Order, OrderStatus, Profile, Role, Tour, RoomType } from '@/types';
+import { NotificationBell } from './components/NotificationBell';
+import { Avatar } from './components/Avatar';
+import { ProfilePage } from './components/ProfilePage';
+import { AdminSettingsPage } from './components/AdminSettingsPage';
+import { StarRating } from './components/StarRating';
 
 const statusMeta: Record<OrderStatus, { label: string; varPrefix: string }> = {
   new: { label: 'Mới', varPrefix: 'new' },
-  confirmed: { label: 'Đã xác nhận', varPrefix: 'confirmed' },
-  deposited: { label: 'Đã cọc', varPrefix: 'deposited' },
-  completed: { label: 'Hoàn thành', varPrefix: 'completed' },
+  consulting: { label: 'Đang tư vấn', varPrefix: 'consulting' },
+  closed: { label: 'Đã chốt', varPrefix: 'closed' },
   cancelled: { label: 'Đã hủy', varPrefix: 'cancelled' },
 };
 
@@ -19,14 +23,22 @@ function Logo({ compact = false }: { compact?: boolean }) {
   return <Link to="/" className="brand"><span className="brand-mark"><ShieldCheck size={18} /></span>{!compact && <span>TourFlow <b>CRM</b></span>}</Link>;
 }
 
-function Button({ children, variant = 'primary', className = '', type = 'button', onClick, disabled = false }: { children: ReactNode; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; className?: string; type?: 'button' | 'submit'; onClick?: () => void; disabled?: boolean }) {
-  return <button type={type} onClick={onClick} disabled={disabled} className={`button button-${variant} ${className}`}>{children}</button>;
+function Button({ children, variant = 'primary', className = '', type = 'button', onClick, disabled = false, style }: { children: ReactNode; variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; className?: string; type?: 'button' | 'submit'; onClick?: () => void; disabled?: boolean; style?: React.CSSProperties }) {
+  return <button type={type} onClick={onClick} disabled={disabled} style={style} className={`button button-${variant} ${className}`}>{children}</button>;
 }
 
-function Badge({ status }: { status: OrderStatus }) { const item = statusMeta[status]; return <span className="status-badge" style={{ color: `var(--status-${item.varPrefix}-text)`, background: `var(--status-${item.varPrefix}-bg)` }}><i style={{ background: `var(--status-${item.varPrefix}-text)` }} />{item.label}</span>; }
+function Badge({ status }: { status: OrderStatus }) {
+  const item = statusMeta[status] || statusMeta.new;
+  return (
+    <span className="status-badge" style={{ color: `var(--status-${item.varPrefix}-text)`, background: `var(--status-${item.varPrefix}-bg)` }}>
+      <i style={{ background: `var(--status-${item.varPrefix}-text)` }} />
+      {item.label}
+    </span>
+  );
+}
 function Card({ children, className = '' }: { children: ReactNode; className?: string }) { return <section className={`card ${className}`}>{children}</section>; }
 function PageHeader({ eyebrow, title, description, actions }: { eyebrow?: string; title: ReactNode; description?: ReactNode; actions?: ReactNode }) { return <div className="page-header"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1>{description && <div className="page-description">{description}</div>}</div>{actions && <div className="header-actions">{actions}</div>}</div>; }
-function Input({ label, value, onChange, placeholder, type = 'text', icon, required = false }: { label?: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; icon?: ReactNode; required?: boolean }) { return <label className="field">{label && <span>{label}{required && <em> *</em>}</span>}<div className="input-wrap">{icon && <span className="input-icon">{icon}</span>}<input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required} /></div></label>; }
+function Input({ label, value, onChange, placeholder, type = 'text', icon, required = false, min, max, step, inputMode }: { label?: string; value: string; onChange: (value: string) => void; placeholder?: string; type?: string; icon?: ReactNode; required?: boolean; min?: number | string; max?: number | string; step?: number | string; inputMode?: 'none' | 'text' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search' }) { return <label className="field">{label && <span>{label}{required && <em> *</em>}</span>}<div className="input-wrap">{icon && <span className="input-icon">{icon}</span>}<input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} required={required} min={min} max={max} step={step} inputMode={inputMode} /></div></label>; }
 function Select({ label, value, onChange, children }: { label?: string; value: string; onChange: (value: string) => void; children: ReactNode }) { return <label className="field">{label && <span>{label}</span>}<div className="select-wrap"><select value={value} onChange={e => onChange(e.target.value)}>{children}</select><ChevronDown size={15} /></div></label>; }
 
 function AuthPage({ mode }: { mode: 'login' | 'forgot' }) {
@@ -120,7 +132,7 @@ function AuthPage({ mode }: { mode: 'login' | 'forgot' }) {
                 label="Username hoặc Email"
                 value={identifier}
                 onChange={setIdentifier}
-                placeholder="username hoặc you@company.com"
+                placeholder="Nhập username hoặc email"
                 icon={<User size={16} />}
                 required
               />
@@ -151,7 +163,7 @@ function AuthPage({ mode }: { mode: 'login' | 'forgot' }) {
               <p>Nhập email công việc để nhận link đặt lại mật khẩu.</p>
             </div>
             <form onSubmit={submit}>
-              <Input label="Email công việc" value={identifier} onChange={setIdentifier} placeholder="you@company.com" type="email" icon={<Mail size={16} />} required />
+              <Input label="Email công việc" value={identifier} onChange={setIdentifier} placeholder="Nhập email công việc" type="email" icon={<Mail size={16} />} required />
               {error && <div className="form-error">{error}</div>}
               {message && <div className="form-success"><Check size={15} />{message}</div>}
               <Button type="submit" className="full-button" disabled={busy}>{busy ? 'Đang gửi...' : 'Gửi link đặt lại'}</Button>
@@ -165,10 +177,9 @@ function AuthPage({ mode }: { mode: 'login' | 'forgot' }) {
   );
 }
 
-function Sidebar() {
+function Sidebar({ profile }: { profile: Profile | null }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [orderCount, setOrderCount] = useState<number>(0);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -179,21 +190,13 @@ function Sidebar() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-        const p = data as Profile | null;
-        if (p && p.is_active === false) {
-          await supabase.auth.signOut();
-          navigate('/login?locked=true');
-          return;
-        }
-        setProfile(p);
         const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('owner_id', user.id);
         setOrderCount(count || 0);
       } catch (e) {
-        console.error('Sidebar user error:', e);
+        console.error('Sidebar order count error:', e);
       }
     })();
-  }, []);
+  }, [profile]);
 
   // Tự động đóng menu tài khoản khi click chuột ra ngoài
   useEffect(() => {
@@ -215,6 +218,7 @@ function Sidebar() {
       { label: 'Tất cả đơn tour', to: '/admin/orders', icon: <ClipboardList size={18} /> },
       { label: 'Nhân viên Sale', to: '/admin/salers', icon: <Users size={18} /> },
       { label: 'Lịch sử hoạt động hệ thống', to: '/admin/activity', icon: <Activity size={18} /> },
+      { label: 'Cài đặt hệ thống', to: '/admin/settings', icon: <Settings size={18} /> },
     ]
     : [
       { label: 'Đơn của tôi', to: '/orders', icon: <ClipboardList size={18} /> },
@@ -239,14 +243,6 @@ function Sidebar() {
             <X size={18} />
           </button>
         </div>
-        <div className="workspace">
-          <div className="workspace-dot">T</div>
-          <div>
-            <b>TourFlow Vietnam</b>
-            <span>Không gian nội bộ</span>
-          </div>
-          <ChevronDown size={14} />
-        </div>
         <nav>
           <span className="nav-label">Workspace</span>
           {nav.map(item => (
@@ -268,13 +264,37 @@ function Sidebar() {
               <b>Tài khoản</b>
               <button
                 type="button"
+                className={location.pathname === '/profile' ? 'active' : ''}
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  navigate('/profile');
+                }}
+              >
+                <User size={14} />
+                <span>Hồ sơ cá nhân</span>
+              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  className={location.pathname === '/admin/settings' ? 'active' : ''}
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    navigate('/admin/settings');
+                  }}
+                >
+                  <Settings size={14} />
+                  <span>Cài đặt hệ thống</span>
+                </button>
+              )}
+              <button
+                type="button"
                 className={location.pathname.includes('change-password') ? 'active' : ''}
                 onClick={() => {
                   setUserMenuOpen(false);
                   navigate('/settings/change-password');
                 }}
               >
-                <Settings size={14} />
+                <KeyRound size={14} />
                 <span>Đổi mật khẩu</span>
               </button>
               <button
@@ -294,8 +314,13 @@ function Sidebar() {
               </button>
             </div>
           )}
-          <div className="user-mini">
-            <div className="avatar">{(profile?.display_name || 'NV').slice(0, 2).toUpperCase()}</div>
+          <div
+            className="user-mini"
+            onClick={() => navigate('/profile')}
+            style={{ cursor: 'pointer' }}
+            title="Nhấn để xem hồ sơ cá nhân"
+          >
+            <Avatar src={profile?.avatar_url} name={profile?.display_name} />
             <div>
               <b>{profile?.display_name || 'Nhân viên Sale'}</b>
               <span>{isAdmin ? 'Quản trị viên' : 'Nhân viên'}</span>
@@ -303,7 +328,10 @@ function Sidebar() {
             <button
               type="button"
               className={`user-menu-button ${userMenuOpen ? 'active' : ''}`}
-              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setUserMenuOpen(!userMenuOpen);
+              }}
               title="Tùy chọn tài khoản"
             >
               <MoreHorizontal size={17} />
@@ -314,8 +342,8 @@ function Sidebar() {
     </>
   );
 }
+
 function AppLayout() {
-  const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -327,16 +355,22 @@ function AppLayout() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-        if (data) setProfile(data as Profile);
+        const p = data as Profile | null;
+        if (p && p.is_active === false) {
+          await supabase.auth.signOut();
+          navigate('/login?locked=true');
+          return;
+        }
+        if (p) setProfile(p);
       } catch (e) {
         console.error('AppLayout profile error:', e);
       }
     })();
-  }, []);
+  }, [navigate]);
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar profile={profile} />
       <div className="main-shell">
         <div className="topbar">
           <div className="top-actions" style={{ marginLeft: 'auto' }}>
@@ -347,11 +381,11 @@ function AppLayout() {
             >
               {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
             </button>
-            <button className="icon-button" title="Thông báo"><Bell size={18} /><i /></button>
+            <NotificationBell profile={profile} />
             <div className="top-date"><CalendarDays size={15} /> {today}</div>
           </div>
         </div>
-        <div className="content"><Outlet /></div>
+        <div className="content"><Outlet context={{ profile, setProfile }} /></div>
       </div>
     </div>
   );
@@ -376,7 +410,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
 
   async function load() {
     setLoading(true);
-    let request = supabase.from('orders').select('*, owner:profiles(display_name, username)').order('created_at', { ascending: false });
+    let request = supabase.from('orders').select('*, owner:profiles(display_name, username, avatar_url)').order('created_at', { ascending: false });
     const { data: user } = await supabase.auth.getUser();
     if (user?.user) {
       setCurrentUserId(user.user.id);
@@ -478,16 +512,278 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
     };
   }, [showFilters, showDateFilters]);
 
-  return <><PageHeader eyebrow={admin ? 'Quản trị đơn tour' : 'Workspace của tôi'} title={admin ? 'Tất cả đơn tour' : 'Đơn tour của tôi'} description={admin ? 'Theo dõi và quản lý toàn bộ đơn tour trong hệ thống.' : 'Theo dõi tiến độ và chăm sóc khách hàng của bạn.'} actions={!admin && <Button onClick={() => navigate('/orders/new')}><Plus size={16} /> Tạo đơn mới</Button>} />
-    <Card className="orders-card"><div className="toolbar"><div className="filter-row"><div className="search-field"><input value={queryName} onChange={e => setQueryName(e.target.value)} placeholder="Tên khách hàng" /></div><div className="search-field"><input value={queryPhone} onChange={e => setQueryPhone(e.target.value)} placeholder="Số điện thoại" /></div><div className="search-field"><input value={queryEmail} onChange={e => setQueryEmail(e.target.value)} placeholder="Email" /></div><div className="search-field"><input value={queryTour} onChange={e => setQueryTour(e.target.value)} placeholder="Tên tour" /></div>{admin && <div className="search-field"><input value={querySaler} onChange={e => setQuerySaler(e.target.value)} placeholder="Nhân viên Sale" /></div>}</div><div className="toolbar-actions"><div className="filter-dropdown"><Button variant="secondary" onClick={() => { setShowFilters(!showFilters); setShowDateFilters(false); }}><span className="filter-dot" style={{ background: status === 'all' ? 'var(--text-dim)' : `var(--status-${statusMeta[status as OrderStatus].varPrefix}-text)` }} />{status === 'all' ? 'Tất cả trạng thái' : statusMeta[status as OrderStatus].label}<ChevronDown size={15} /></Button>{showFilters && <div className="dropdown-panel"><b>Lọc theo trạng thái</b>{(['all', ...Object.keys(statusMeta)] as string[]).map(item => <button key={item} onClick={() => { setStatus(item); setShowFilters(false); }}>{status === item && <Check size={14} />}{item === 'all' ? 'Tất cả trạng thái' : statusMeta[item as OrderStatus].label}</button>)}</div>}</div><div className="filter-dropdown"><Button variant="secondary" onClick={() => { setShowDateFilters(!showDateFilters); setShowFilters(false); }} className="date-button"><CalendarDays size={16} /> {dateRange === 'all' ? (dateType === 'booking_date' ? 'Ngày tạo đơn' : 'Ngày đi tour') : dateRange === 'specific_day' && specificDate ? new Date(specificDate).toLocaleDateString('vi-VN') : dateMeta[dateRange]?.label} <ChevronDown size={14} /></Button>{showDateFilters && <div className="dropdown-panel"><b>Loại ngày</b><div style={{ display: 'flex', gap: '5px', padding: '0 8px 10px', borderBottom: '1px solid var(--border-row)', marginBottom: '5px' }}><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: dateType === 'booking_date' ? 'var(--nav-active-bg)' : 'transparent', color: dateType === 'booking_date' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center' }} onClick={() => setDateType('booking_date')}>Ngày tạo đơn</button><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: dateType === 'tour_date' ? 'var(--nav-active-bg)' : 'transparent', color: dateType === 'tour_date' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center' }} onClick={() => setDateType('tour_date')}>Ngày đi tour</button></div><b>Thứ tự sắp xếp</b><div style={{ display: 'flex', gap: '5px', padding: '0 8px 10px', borderBottom: '1px solid var(--border-row)', marginBottom: '5px' }}><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: sortOrder === 'desc' ? 'var(--nav-active-bg)' : 'transparent', color: sortOrder === 'desc' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSortOrder('desc')}><ArrowDown size={11} /> Giảm dần</button><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: sortOrder === 'asc' ? 'var(--nav-active-bg)' : 'transparent', color: sortOrder === 'asc' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSortOrder('asc')}><ArrowUp size={11} /> Tăng dần</button></div><b>Lọc thời gian</b>{Object.keys(dateMeta).map(item => <button key={item} onClick={() => { setDateRange(item); setSpecificDate(''); setShowDateFilters(false); }}>{dateRange === item && <Check size={14} />}{dateMeta[item].label}</button>)}<div style={{ marginTop: '5px', borderTop: '1px solid var(--border-row)', paddingTop: '5px' }}><b>Ngày cụ thể</b><div style={{ padding: '0 8px', marginBottom: '5px' }}><input type="date" value={specificDate} onChange={e => { setSpecificDate(e.target.value); if (e.target.value) setDateRange('specific_day'); setShowDateFilters(false); }} style={{ width: '100%', padding: '6px 8px', fontSize: '11px', background: 'var(--bg-input)', color: 'var(--text-main)', border: '1px solid var(--border-input)', borderRadius: '5px', outline: 'none' }} /></div></div></div>}</div></div></div><div className="table-meta"><span><b>{filtered.length}</b> đơn tour</span><span className="live-status"><i /> Cập nhật trực tiếp</span></div>{loading ? <div className="loading-state">Đang tải dữ liệu...</div> : filtered.length === 0 ? <div className="empty-state"><ClipboardList size={30} /><h3>Không tìm thấy kết quả</h3><p>Thử thay đổi điều kiện lọc.</p>{!admin && <Button onClick={() => navigate('/orders/new')}><Plus size={16} /> Tạo đơn đầu tiên</Button>}</div> : <div className="table-scroll"><table className="orders-table"><thead><tr><th style={{ width: '12%', cursor: 'pointer', userSelect: 'none' }} onClick={() => { if (dateType === 'booking_date') { setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); } else { setDateType('booking_date'); setSortOrder('desc'); } }} title="Bấm để chuyển chiều sắp xếp Ngày tạo đơn"><div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>NGÀY TẠO ĐƠN {dateType === 'booking_date' ? (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}</div></th><th style={{ width: admin ? '18%' : '23%' }}>KHÁCH HÀNG</th><th style={{ width: admin ? '15%' : '17%' }}>SỐ ĐIỆN THOẠI</th>{admin && <th style={{ width: '17%' }}>NHÂN VIÊN SALE</th>}<th style={{ width: admin ? '20%' : '22%' }}>TOUR</th><th style={{ width: '12%', cursor: 'pointer', userSelect: 'none' }} onClick={() => { if (dateType === 'tour_date') { setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); } else { setDateType('tour_date'); setSortOrder('desc'); } }} title="Bấm để chuyển chiều sắp xếp Ngày đi tour"><div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>NGÀY ĐI TOUR {dateType === 'tour_date' ? (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}</div></th><th style={{ width: '14%' }}>TRẠNG THÁI</th></tr></thead><tbody>{paginatedOrders.map((order) => <tr key={order.id} className="clickable-row" onClick={() => navigate(`/orders/${order.id}`)}><td className="muted">{new Date(order.booking_date).toLocaleDateString('vi-VN')}</td><td><span className="customer-name-pure" title={order.customer_name || 'Khách hàng'}>{order.customer_name || 'Chưa đặt tên'}</span></td><td>{order.customer_phone ? <span className="customer-phone" title={`Số điện thoại: ${order.customer_phone}`} onClick={(e) => e.stopPropagation()}><Phone size={12} /> {order.customer_phone}</span> : <span className="customer-phone customer-phone-empty"><Phone size={12} /> Chưa có SĐT</span>}</td>{admin && <td><div className="owner-cell"><span className="avatar small">{(order.owner?.display_name || 'NV').slice(0, 2).toUpperCase()}</span>{order.owner?.display_name || 'Chưa phân công'}</div></td>}<td><b className="tour-cell">{order.tour_name}</b><span className="mono" style={{ display: 'block', fontSize: '10px', color: 'var(--mono-color)', marginTop: '2px' }}>{order.order_code}</span></td><td className="muted">{new Date(order.tour_date).toLocaleDateString('vi-VN')}</td><td><Badge status={order.status} /></td></tr>)}</tbody></table></div>}<div className="table-footer"><span>Hiển thị {paginatedOrders.length} / {filtered.length} kết quả</span><div className="pagination">{Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => <button key={p} className={p === page ? 'current' : ''} onClick={() => setPage(p)}>{p}</button>)}{totalPages > 1 && <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} style={{ opacity: page >= totalPages ? 0.4 : 1, cursor: page >= totalPages ? 'not-allowed' : 'pointer' }} title="Trang tiếp"><ArrowLeft size={14} className="flip" /></button>}</div></div></Card></>;
+  return <><PageHeader title={admin ? 'Tất cả đơn tour' : 'Đơn tour của tôi'} actions={!admin && <Button onClick={() => navigate('/orders/new')}><Plus size={16} /> Tạo đơn mới</Button>} />
+    <Card className="orders-card"><div className="toolbar"><div className="filter-row"><div className="search-field"><input value={queryName} onChange={e => setQueryName(e.target.value)} placeholder="Tên khách hàng" /></div><div className="search-field"><input value={queryPhone} onChange={e => setQueryPhone(e.target.value)} placeholder="Số điện thoại" /></div><div className="search-field"><input value={queryEmail} onChange={e => setQueryEmail(e.target.value)} placeholder="Email" /></div><div className="search-field"><input value={queryTour} onChange={e => setQueryTour(e.target.value)} placeholder="Tên tour" /></div>{admin && <div className="search-field"><input value={querySaler} onChange={e => setQuerySaler(e.target.value)} placeholder="Nhân viên Sale" /></div>}</div><div className="toolbar-actions"><div className="filter-dropdown"><Button variant="secondary" onClick={() => { setShowFilters(!showFilters); setShowDateFilters(false); }}><span className="filter-dot" style={{ background: status === 'all' ? 'var(--text-dim)' : `var(--status-${statusMeta[status as OrderStatus].varPrefix}-text)` }} />{status === 'all' ? 'Tất cả trạng thái' : statusMeta[status as OrderStatus].label}<ChevronDown size={15} /></Button>{showFilters && <div className="dropdown-panel"><b>Lọc theo trạng thái</b>{(['all', ...Object.keys(statusMeta)] as string[]).map(item => <button key={item} onClick={() => { setStatus(item); setShowFilters(false); }}>{status === item && <Check size={14} />}{item === 'all' ? 'Tất cả trạng thái' : statusMeta[item as OrderStatus].label}</button>)}</div>}</div><div className="filter-dropdown"><Button variant="secondary" onClick={() => { setShowDateFilters(!showDateFilters); setShowFilters(false); }} className="date-button"><CalendarDays size={16} /> {dateRange === 'all' ? (dateType === 'booking_date' ? 'Ngày tạo đơn' : 'Ngày đi tour') : dateRange === 'specific_day' && specificDate ? new Date(specificDate).toLocaleDateString('vi-VN') : dateMeta[dateRange]?.label} <ChevronDown size={14} /></Button>{showDateFilters && <div className="dropdown-panel"><b>Loại ngày</b><div style={{ display: 'flex', gap: '5px', padding: '0 8px 10px', borderBottom: '1px solid var(--border-row)', marginBottom: '5px' }}><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: dateType === 'booking_date' ? 'var(--nav-active-bg)' : 'transparent', color: dateType === 'booking_date' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center' }} onClick={() => setDateType('booking_date')}>Ngày tạo đơn</button><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: dateType === 'tour_date' ? 'var(--nav-active-bg)' : 'transparent', color: dateType === 'tour_date' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center' }} onClick={() => setDateType('tour_date')}>Ngày đi tour</button></div><b>Thứ tự sắp xếp</b><div style={{ display: 'flex', gap: '5px', padding: '0 8px 10px', borderBottom: '1px solid var(--border-row)', marginBottom: '5px' }}><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: sortOrder === 'desc' ? 'var(--nav-active-bg)' : 'transparent', color: sortOrder === 'desc' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSortOrder('desc')}><ArrowDown size={11} /> Giảm dần</button><button style={{ flex: 1, padding: '6px', textAlign: 'center', background: sortOrder === 'asc' ? 'var(--nav-active-bg)' : 'transparent', color: sortOrder === 'asc' ? 'var(--nav-active-text)' : 'var(--text-dim)', borderRadius: '5px', fontSize: '10px', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => setSortOrder('asc')}><ArrowUp size={11} /> Tăng dần</button></div><b>Lọc thời gian</b>{Object.keys(dateMeta).map(item => <button key={item} onClick={() => { setDateRange(item); setSpecificDate(''); setShowDateFilters(false); }}>{dateRange === item && <Check size={14} />}{dateMeta[item].label}</button>)}<div style={{ marginTop: '5px', borderTop: '1px solid var(--border-row)', paddingTop: '5px' }}><b>Ngày cụ thể</b><div style={{ padding: '0 8px', marginBottom: '5px' }}><input type="date" value={specificDate} onChange={e => { setSpecificDate(e.target.value); if (e.target.value) setDateRange('specific_day'); setShowDateFilters(false); }} style={{ width: '100%', padding: '6px 8px', fontSize: '11px', background: 'var(--bg-input)', color: 'var(--text-main)', border: '1px solid var(--border-input)', borderRadius: '5px', outline: 'none' }} /></div></div></div>}</div></div></div><div className="table-meta"><span><b>{filtered.length}</b> đơn tour</span><span className="live-status"><i /> Cập nhật trực tiếp</span></div>{loading ? <div className="loading-state">Đang tải dữ liệu...</div> : filtered.length === 0 ? <div className="empty-state"><ClipboardList size={30} /><h3>Không tìm thấy kết quả</h3><p>Thử thay đổi điều kiện lọc.</p>{!admin && <Button onClick={() => navigate('/orders/new')}><Plus size={16} /> Tạo đơn đầu tiên</Button>}</div> : <div className="table-scroll"><table className="orders-table"><thead><tr><th style={{ width: '12%', cursor: 'pointer', userSelect: 'none' }} onClick={() => { if (dateType === 'booking_date') { setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); } else { setDateType('booking_date'); setSortOrder('desc'); } }} title="Bấm để chuyển chiều sắp xếp Ngày tạo đơn"><div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>NGÀY TẠO ĐƠN {dateType === 'booking_date' ? (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}</div></th><th style={{ width: admin ? '18%' : '23%' }}>KHÁCH HÀNG</th><th style={{ width: admin ? '15%' : '17%' }}>SỐ ĐIỆN THOẠI</th>{admin && <th style={{ width: '17%' }}>NHÂN VIÊN SALE</th>}<th style={{ width: admin ? '20%' : '22%' }}>TOUR</th><th style={{ width: '12%', cursor: 'pointer', userSelect: 'none' }} onClick={() => { if (dateType === 'tour_date') { setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); } else { setDateType('tour_date'); setSortOrder('desc'); } }} title="Bấm để chuyển chiều sắp xếp Ngày đi tour"><div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>NGÀY ĐI TOUR {dateType === 'tour_date' ? (sortOrder === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />) : <ArrowUpDown size={11} style={{ opacity: 0.4 }} />}</div></th><th style={{ width: '14%' }}>TRẠNG THÁI</th></tr></thead><tbody>{paginatedOrders.map((order) => <tr key={order.id} className="clickable-row" onClick={() => navigate(`/orders/${order.id}`)}><td className="muted">{new Date(order.booking_date).toLocaleDateString('vi-VN')}</td><td><span className="customer-name-pure" title={order.customer_name || 'Khách hàng'}>{order.customer_name || 'Chưa đặt tên'}</span></td><td>{order.customer_phone ? <span className="customer-phone" title={`Số điện thoại: ${order.customer_phone}`} onClick={(e) => e.stopPropagation()}><Phone size={12} /> {order.customer_phone}</span> : <span className="customer-phone customer-phone-empty"><Phone size={12} /> Chưa có SĐT</span>}</td>{admin && <td><div className="owner-cell"><Avatar src={order.owner?.avatar_url} name={order.owner?.display_name} size="sm" /><b>{order.owner?.display_name || 'Chưa phân công'}</b></div></td>}<td><b className="tour-cell">{order.tour_name}</b><div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '3px' }}>{order.num_guests && <span className="guest-badge" title={`Số lượng khách: ${order.num_guests} người`}><Users size={10} /> {order.num_guests} khách</span>}{order.rating && <span className="rating-badge" title={`Hạng sao khách sạn: ${order.rating} sao`}><Star size={10} className="star-filled" /> {order.rating}★</span>}</div>{order.room_type && <span className="room-type-badge" title={`Dạng phòng: ${order.room_type}`}>{order.room_type}</span>}</td><td className="muted">{new Date(order.tour_date).toLocaleDateString('vi-VN')}</td><td><Badge status={order.status} /></td></tr>)}</tbody></table></div>}<div className="table-footer"><span>Hiển thị {paginatedOrders.length} / {filtered.length} kết quả</span><div className="pagination">{Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => <button key={p} className={p === page ? 'current' : ''} onClick={() => setPage(p)}>{p}</button>)}{totalPages > 1 && <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} style={{ opacity: page >= totalPages ? 0.4 : 1, cursor: page >= totalPages ? 'not-allowed' : 'pointer' }} title="Trang tiếp"><ArrowLeft size={14} className="flip" /></button>}</div></div></Card></>;
 }
 
 function OrderForm() {
-  const navigate = useNavigate(); const { id } = useParams(); const editing = Boolean(id); const [form, setForm] = useState({ customer_name: '', customer_phone: '', customer_email: '', tour_name: '', booking_date: new Date().toISOString().slice(0, 10), tour_date: '', status: 'new' as OrderStatus, notes: '' }); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  useEffect(() => { if (id) supabase.from('orders').select('*').eq('id', id).maybeSingle().then(({ data }) => { if (data) setForm({ customer_name: data.customer_name, customer_phone: data.customer_phone, customer_email: data.customer_email || '', tour_name: data.tour_name, booking_date: data.booking_date, tour_date: data.tour_date, status: data.status, notes: data.notes || '' }); }); }, [id]);
-  function update(key: string, value: string) { setForm(prev => ({ ...prev, [key]: value })); }
-  async function submit(e: FormEvent) { e.preventDefault(); setError(''); if (form.tour_date < form.booking_date) { setError('Ngày đi tour phải từ ngày tạo đơn trở đi.'); return; } if (!form.tour_name.trim()) { setError('Vui lòng nhập tên tour.'); return; } setBusy(true); const { data: { user } } = await supabase.auth.getUser(); if (!user) { setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'); setBusy(false); return; } const { data: profile } = await supabase.from('profiles').select('is_active').eq('id', user.id).maybeSingle(); if (profile && !profile.is_active) { setError('Tài khoản của bạn đã bị khóa.'); setBusy(false); return; } const payload = { ...form, owner_id: user.id, customer_email: form.customer_email || null, notes: form.notes || null }; const result = editing ? await supabase.from('orders').update(payload).eq('id', id) : await supabase.from('orders').insert(payload); setBusy(false); if (result.error) { setError(`Lỗi: ${result.error.message}`); return; } navigate(editing ? `/orders/${id}` : '/orders'); }
-  return <><PageHeader eyebrow={editing ? 'Chỉnh sửa đơn tour' : 'Đơn tour mới'} title={editing ? 'Chỉnh sửa đơn tour' : 'Tạo đơn tour mới'} description="Điền thông tin để lưu lại yêu cầu đặt tour của khách hàng." actions={<Button variant="secondary" onClick={() => navigate(-1)}><ArrowLeft size={16} /> Quay lại</Button>} /><form onSubmit={submit} className="form-layout"><Card><div className="card-title"><span className="section-icon"><User size={17} /></span><div><h2>Thông tin khách hàng</h2><p>Thông tin liên hệ của khách hàng.</p></div></div><div className="form-grid two"><Input label="Họ và tên" value={form.customer_name} onChange={v => update('customer_name', v)} placeholder="Nguyễn Văn An" required /><Input label="Số điện thoại" value={form.customer_phone} onChange={v => update('customer_phone', v)} placeholder="0901 234 567" icon={<Phone size={15} />} required /></div><Input label="Email" value={form.customer_email} onChange={v => update('customer_email', v)} placeholder="email@khachhang.com" type="email" icon={<Mail size={15} />} /></Card><Card><div className="card-title"><span className="section-icon"><ClipboardList size={17} /></span><div><h2>Thông tin đơn tour</h2><p>Lịch trình và trạng thái đặt tour.</p></div></div><Input label="Tên tour" value={form.tour_name} onChange={v => update('tour_name', v)} placeholder="Ví dụ: Tour Đà Lạt 3N2Đ, Phú Quốc 4N3Đ..." required /><div className="form-grid two"><Input label="Ngày tạo đơn" value={form.booking_date} onChange={v => update('booking_date', v)} type="date" required /><Input label="Ngày đi tour" value={form.tour_date} onChange={v => update('tour_date', v)} type="date" required /></div><Select label="Trạng thái" value={form.status} onChange={v => update('status', v)}>{Object.entries(statusMeta).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</Select></Card><Card><div className="card-title"><span className="section-icon"><FileText size={17} /></span><div><h2>Ghi chú</h2><p>Yêu cầu đặc biệt hoặc thông tin cần lưu ý.</p></div></div><label className="field"><textarea value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Ví dụ: Khách yêu cầu phòng đôi, ăn chay..." /></label></Card>{error && <div className="form-error">{error}</div>}<div className="form-actions"><Button variant="secondary" onClick={() => navigate(-1)}>Hủy</Button><Button type="submit" disabled={busy}>{busy ? 'Đang lưu...' : editing ? 'Lưu thay đổi' : 'Lưu đơn tour'} <Check size={16} /></Button></div></form></>;
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const editing = Boolean(id);
+  const [form, setForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    customer_email: '',
+    tour_name: '',
+    room_type: '',
+    num_guests: '1',
+    rating: 5,
+    booking_date: new Date().toISOString().slice(0, 10),
+    tour_date: '',
+    status: 'new' as OrderStatus,
+    notes: ''
+  });
+  const [tours, setTours] = useState<Tour[]>([]);
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [currentOwner, setCurrentOwner] = useState<{ display_name: string; username: string; avatar_url?: string | null } | null>(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // Tải danh sách tour và dạng phòng được định nghĩa trong Settings
+    Promise.all([
+      supabase.from('tours').select('*').order('name'),
+      supabase.from('room_types').select('*').order('name')
+    ]).then(([toursRes, roomTypesRes]) => {
+      if (toursRes.data) setTours(toursRes.data as Tour[]);
+      if (roomTypesRes.data) setRoomTypes(roomTypesRes.data as RoomType[]);
+    }).catch(err => {
+      console.error('Lỗi khi tải danh sách tour/dạng phòng:', err);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (id) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      let q = supabase
+        .from('orders')
+        .select('*, owner:profiles(display_name, username, avatar_url)');
+      q = isUuid ? q.eq('id', id) : q.eq('order_code', id);
+      q.maybeSingle()
+        .then(({ data }) => {
+          if (data) {
+            setForm({
+              customer_name: data.customer_name,
+              customer_phone: data.customer_phone,
+              customer_email: data.customer_email || '',
+              tour_name: data.tour_name,
+              room_type: data.room_type || '',
+              num_guests: data.num_guests !== null && data.num_guests !== undefined ? String(data.num_guests) : '1',
+              rating: data.rating ?? 5,
+              booking_date: data.booking_date,
+              tour_date: data.tour_date,
+              status: data.status,
+              notes: data.notes || ''
+            });
+            setCurrentOwner(data.owner || null);
+          }
+        });
+    }
+  }, [id]);
+
+  function update(key: string, value: any) {
+    setForm(prev => ({ ...prev, [key]: value }));
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    if (form.tour_date < form.booking_date) {
+      setError('Ngày đi tour phải từ ngày tạo đơn trở đi.');
+      return;
+    }
+    if (!form.tour_name.trim()) {
+      setError('Vui lòng chọn tour du lịch.');
+      return;
+    }
+    setBusy(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setError('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+      setBusy(false);
+      return;
+    }
+
+    const { data: profile } = await supabase.from('profiles').select('is_active').eq('id', user.id).maybeSingle();
+    if (profile && !profile.is_active) {
+      setError('Tài khoản của bạn đã bị khóa.');
+      setBusy(false);
+      return;
+    }
+
+    const parsedGuests = parseInt(String(form.num_guests).trim(), 10);
+    const safeGuests = !isNaN(parsedGuests) && parsedGuests > 0 ? parsedGuests : 1;
+
+    let result;
+    if (editing) {
+      // Khi sửa đơn: Giữ nguyên người phụ trách (owner_id) ban đầu, tuyệt đối KHÔNG ghi đè bằng user.id của người sửa
+      const updatePayload = {
+        customer_name: form.customer_name,
+        customer_phone: form.customer_phone,
+        customer_email: form.customer_email || null,
+        tour_name: form.tour_name,
+        room_type: form.room_type ? form.room_type.trim() : null,
+        num_guests: safeGuests,
+        rating: Number(form.rating) >= 1 && Number(form.rating) <= 5 ? Math.floor(Number(form.rating)) : 5,
+        booking_date: form.booking_date,
+        tour_date: form.tour_date,
+        status: form.status,
+        notes: form.notes || null,
+        updated_at: new Date().toISOString()
+      };
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id!);
+      let query = supabase.from('orders').update(updatePayload);
+      query = isUuid ? query.eq('id', id) : query.eq('order_code', id);
+      result = await query;
+    } else {
+      // Khi tạo mới: Gán người tạo làm owner_id ban đầu
+      const insertPayload = {
+        customer_name: form.customer_name,
+        customer_phone: form.customer_phone,
+        customer_email: form.customer_email || null,
+        tour_name: form.tour_name,
+        room_type: form.room_type ? form.room_type.trim() : null,
+        num_guests: safeGuests,
+        rating: Number(form.rating) >= 1 && Number(form.rating) <= 5 ? Math.floor(Number(form.rating)) : 5,
+        booking_date: form.booking_date,
+        tour_date: form.tour_date,
+        status: form.status,
+        notes: form.notes || null,
+        owner_id: user.id
+      };
+      result = await supabase.from('orders').insert(insertPayload);
+    }
+
+    setBusy(false);
+    if (result.error) {
+      setError(`Lỗi: ${result.error.message}`);
+      return;
+    }
+    navigate(editing ? `/orders/${id}` : '/orders');
+  }
+
+  return (
+    <>
+      <PageHeader
+        title={editing ? 'Chỉnh sửa đơn tour' : 'Tạo đơn tour mới'}
+        actions={
+          <Button variant="secondary" onClick={() => navigate(-1)}>
+            <ArrowLeft size={16} /> Quay lại
+          </Button>
+        }
+      />
+      <form onSubmit={submit} className="form-layout">
+        {editing && currentOwner && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', background: 'var(--bg-card-alt)', borderRadius: '8px', border: '1px solid var(--border-alt)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Nhân viên phụ trách:</span>
+            <Avatar src={currentOwner.avatar_url} name={currentOwner.display_name} size="xs" />
+            <b style={{ fontSize: '11px', color: 'var(--text-main)' }}>{currentOwner.display_name}</b>
+            <span className="mono" style={{ fontSize: '10px', color: 'var(--mono-color)' }}>@{currentOwner.username}</span>
+          </div>
+        )}
+        <Card>
+          <div className="card-title">
+            <span className="section-icon"><User size={17} /></span>
+            <div>
+              <h2>Thông tin khách hàng</h2>
+              <p>Thông tin liên hệ của khách hàng.</p>
+            </div>
+          </div>
+          <div className="form-grid two">
+            <Input label="Họ và tên" value={form.customer_name} onChange={v => update('customer_name', v)} placeholder="Nhập họ và tên" required />
+            <Input label="Số điện thoại" value={form.customer_phone} onChange={v => update('customer_phone', v)} placeholder="Nhập số điện thoại" icon={<Phone size={15} />} required />
+          </div>
+          <Input label="Email" value={form.customer_email} onChange={v => update('customer_email', v)} placeholder="Nhập email" type="email" icon={<Mail size={15} />} />
+        </Card>
+        <Card>
+          <div className="card-title">
+            <span className="section-icon"><ClipboardList size={17} /></span>
+            <div>
+              <h2>Thông tin đơn tour</h2>
+              <p>Lịch trình và trạng thái đặt tour.</p>
+            </div>
+          </div>
+          <div className="form-grid two">
+            <Select label="Tên tour" value={form.tour_name} onChange={v => update('tour_name', v)}>
+              <option value="">-- Chọn tour du lịch --</option>
+              {editing && form.tour_name && !tours.some(t => t.is_active && t.name === form.tour_name) && (
+                <option value={form.tour_name}>{form.tour_name}</option>
+              )}
+              {tours.filter(t => t.is_active).map(t => (
+                <option key={t.id} value={t.name}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+
+            <Select label="Dạng phòng (Type Room)" value={form.room_type} onChange={v => update('room_type', v)}>
+              <option value="">-- Chọn dạng phòng (Tùy chọn) --</option>
+              {editing && form.room_type && !roomTypes.some(r => r.is_active && r.name === form.room_type) && (
+                <option value={form.room_type}>{form.room_type}</option>
+              )}
+              {roomTypes.filter(r => r.is_active).map(r => (
+                <option key={r.id} value={r.name}>
+                  {r.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="form-grid two">
+            <Input
+              label="Số lượng khách"
+              type="text"
+              inputMode="numeric"
+              value={form.num_guests}
+              onChange={v => {
+                // Chỉ nhận các ký tự số, loại bỏ hoàn toàn nút mũi tên tăng giảm
+                const digits = v.replace(/[^0-9]/g, '');
+                update('num_guests', digits);
+              }}
+              icon={<Users size={15} />}
+              placeholder="Nhập số lượng khách"
+              required
+            />
+            <div className="field">
+              <span>Hạng sao khách sạn<em> *</em></span>
+              <StarRating
+                value={form.rating}
+                onChange={r => setForm(p => ({ ...p, rating: r }))}
+              />
+            </div>
+          </div>
+          <div className="form-grid two">
+            <Input label="Ngày tạo đơn" value={form.booking_date} onChange={v => update('booking_date', v)} type="date" required />
+            <Input label="Ngày đi tour" value={form.tour_date} onChange={v => update('tour_date', v)} type="date" required />
+          </div>
+          <Select label="Trạng thái" value={form.status} onChange={v => update('status', v)}>
+            {Object.entries(statusMeta).map(([key, value]) => (
+              <option key={key} value={key}>{value.label}</option>
+            ))}
+          </Select>
+        </Card>
+        <Card>
+          <div className="card-title">
+            <span className="section-icon"><FileText size={17} /></span>
+            <div>
+              <h2>Ghi chú</h2>
+              <p>Yêu cầu đặc biệt hoặc thông tin cần lưu ý.</p>
+            </div>
+          </div>
+          <label className="field">
+            <textarea value={form.notes} onChange={e => update('notes', e.target.value)} placeholder="Nhập ghi chú..." />
+          </label>
+        </Card>
+        {error && <div className="form-error">{error}</div>}
+        <div className="form-actions">
+          <Button variant="secondary" onClick={() => navigate(-1)}>Hủy</Button>
+          <Button type="submit" disabled={busy}>
+            {busy ? 'Đang lưu...' : editing ? 'Lưu thay đổi' : 'Lưu đơn tour'} <Check size={16} />
+          </Button>
+        </div>
+      </form>
+    </>
+  );
 }
 
 function OrderDetail() {
@@ -506,11 +802,50 @@ function OrderDetail() {
     });
   }, []);
 
+  const [loading, setLoading] = useState(true);
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+
   useEffect(() => {
-    if (id) supabase.from('orders').select('*, owner:profiles(display_name, username)').eq('id', id).maybeSingle().then(({ data }) => setOrder(data as Order | null));
+    if (!id) return;
+    setLoading(true);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    let q = supabase.from('orders').select('*, owner:profiles(display_name, username, avatar_url)');
+    q = isUuid ? q.eq('id', id) : q.eq('order_code', id);
+    q.maybeSingle().then(({ data }) => {
+      setOrder(data as Order | null);
+      setLoading(false);
+    });
   }, [id]);
 
-  if (!order) return <div className="loading-state">Đang tải đơn tour...</div>;
+  // Click outside to close status dropdown
+  useEffect(() => {
+    if (!statusDropdownOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as HTMLElement | null;
+      if (target && !target.closest('.od-status-dropdown-wrap')) {
+        setStatusDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [statusDropdownOpen]);
+
+  if (loading) return <div className="loading-state">Đang tải đơn tour...</div>;
+  if (!order) {
+    return (
+      <div className="empty-state">
+        <ClipboardList size={32} />
+        <h3>Đơn tour không tồn tại</h3>
+        <p>Đơn tour này có thể đã bị xóa hoặc bạn không có quyền truy cập.</p>
+        <Button variant="secondary" onClick={() => navigate(isAdmin ? '/admin/orders' : '/orders')} style={{ marginTop: '14px' }}>
+          Quay lại danh sách
+        </Button>
+      </div>
+    );
+  }
 
   const canDelete = isAdmin || (currentUserId && order.owner_id === currentUserId);
 
@@ -524,28 +859,447 @@ function OrderDetail() {
     navigate(isAdmin ? '/admin/orders' : '/orders');
   }
 
+  async function handleQuickRate(newRating: number) {
+    if (!order) return;
+    setOrder(prev => prev ? { ...prev, rating: newRating } : null);
+    await supabase.from('orders').update({ rating: newRating, updated_at: new Date().toISOString() }).eq('id', order.id);
+  }
+
+  async function handleQuickStatus(newStatus: OrderStatus) {
+    if (!order || order.status === newStatus) return;
+    setOrder(prev => prev ? { ...prev, status: newStatus } : null);
+    setStatusDropdownOpen(false);
+    await supabase.from('orders').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', order.id);
+  }
+
+  function handleCopy(text: string, type: 'code' | 'phone' | 'id') {
+    navigator.clipboard.writeText(text);
+    if (type === 'code') {
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 1800);
+    } else if (type === 'phone') {
+      setCopiedPhone(true);
+      setTimeout(() => setCopiedPhone(false), 1800);
+    } else {
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 1800);
+    }
+  }
+
+  // Days countdown calculation
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tDay = new Date(order.tour_date);
+  tDay.setHours(0, 0, 0, 0);
+  const diffDays = Math.ceil((tDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+  // Customer initials
+  const customerInitials = (order.customer_name || 'KH')
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map(p => p[0]?.toUpperCase())
+    .join('');
+
   return (
-    <>
-      <PageHeader
-        title={<span className="detail-title">{order.order_code} <Badge status={order.status} /></span>}
-        description={
-          <div className="order-dates-meta">
-            <div className="meta-row"><span className="meta-label">Tạo lúc</span> <span>{new Date(order.created_at).toLocaleString('vi-VN')}</span></div>
-            <div className="meta-row"><span className="meta-label">Cập nhật</span> <span>{new Date(order.updated_at).toLocaleString('vi-VN')}</span></div>
+    <div className="od-shell">
+      {/* Breadcrumb & Navigation */}
+      <div className="od-breadcrumb">
+        <Link to={isAdmin ? '/admin/orders' : '/orders'}>Đơn tour</Link>
+        <span>/</span>
+        <span>{order.order_code}</span>
+      </div>
+
+      {/* Header Card */}
+      <div className="od-header-card">
+        <div className="od-header-left">
+          <div className="od-code-box">
+            <span className="od-code-text">{order.order_code}</span>
+            <button
+              type="button"
+              className="od-copy-btn"
+              onClick={() => handleCopy(order.order_code, 'code')}
+              title="Sao chép mã đơn"
+            >
+              {copiedCode ? <CheckCheck size={16} color="#10b981" /> : <Copy size={16} />}
+            </button>
           </div>
-        }
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => navigate(-1)}><ArrowLeft size={16} /> Quay lại</Button>
-            <Button onClick={() => navigate(`/orders/${order.id}/edit`)}><Pencil size={16} /> Chỉnh sửa</Button>
-            {canDelete && <Button variant="danger" onClick={handleDelete}><Trash2 size={16} /> Xóa đơn tour</Button>}
-          </>
-        }
-      /><div className="detail-grid"><Card><div className="card-title"><span className="section-icon"><User size={17} /></span><h2>Thông tin khách hàng</h2></div><div className="detail-info"><div><span>Họ và tên</span><b>{order.customer_name}</b></div><div><span>Số điện thoại</span><b>{order.customer_phone}</b></div><div><span>Email</span><b>{order.customer_email || 'Chưa cập nhật'}</b></div></div></Card><Card><div className="card-title"><span className="section-icon"><CalendarDays size={17} /></span><h2>Thông tin chuyến đi</h2></div><div className="detail-info"><div><span>Tên tour</span><b>{order.tour_name}</b></div><div><span>Ngày tạo đơn</span><b>{new Date(order.booking_date).toLocaleDateString('vi-VN')}</b></div><div><span>Ngày đi tour</span><b>{new Date(order.tour_date).toLocaleDateString('vi-VN')}</b></div></div></Card><Card className="detail-full"><div className="card-title"><span className="section-icon"><FileText size={17} /></span><h2>Ghi chú</h2></div><p className="notes-text">{order.notes || 'Chưa có ghi chú cho đơn tour này.'}</p></Card></div></>);
+
+          {/* Interactive Status Dropdown */}
+          <div className="od-status-dropdown-wrap">
+            <div
+              className="od-status-trigger"
+              onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+              title="Bấm để đổi nhanh trạng thái"
+            >
+              <Badge status={order.status} />
+              <ChevronDown size={14} style={{ color: 'var(--text-dim)', transform: statusDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+            </div>
+
+            {statusDropdownOpen && (
+              <div className="od-status-menu">
+                {(Object.keys(statusMeta) as OrderStatus[]).map(st => (
+                  <button
+                    key={st}
+                    type="button"
+                    className={`od-status-menu-item ${order.status === st ? 'selected' : ''}`}
+                    onClick={() => handleQuickStatus(st)}
+                  >
+                    <i style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: `var(--status-${statusMeta[st].varPrefix}-text)`,
+                      display: 'inline-block'
+                    }} />
+                    <span>{statusMeta[st].label}</span>
+                    {order.status === st && <Check size={14} style={{ marginLeft: 'auto' }} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="od-header-actions">
+          <Button variant="secondary" onClick={() => navigate(-1)}>
+            <ArrowLeft size={16} /> Quay lại
+          </Button>
+          <Button onClick={() => navigate(`/orders/${order.id}/edit`)}>
+            <Pencil size={16} /> Chỉnh sửa
+          </Button>
+          {canDelete && (
+            <Button variant="danger" onClick={handleDelete}>
+              <Trash2 size={16} /> Xóa đơn
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Lifecycle Progress Pipeline */}
+      <div className="od-pipeline-card">
+        <div className="od-pipeline-title-row">
+          <span className="od-pipeline-title">Tiến trình xử lý đơn tour</span>
+          {order.status === 'cancelled' && (
+            <span style={{ fontSize: '11px', color: 'var(--error-text)', fontWeight: 600 }}>
+              Đơn đang ở trạng thái Đã hủy
+            </span>
+          )}
+        </div>
+
+        {order.status === 'cancelled' ? (
+          <div className="od-cancelled-banner">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Badge status="cancelled" />
+              <span>Đơn tour này đã bị hủy. Bạn có thể kích hoạt lại bằng cách chọn trạng thái tư vấn.</span>
+            </div>
+            <Button variant="secondary" onClick={() => handleQuickStatus('consulting')} style={{ fontSize: '11px', minHeight: '32px' }}>
+              Chuyển sang Đang tư vấn
+            </Button>
+          </div>
+        ) : (
+          <div className="od-pipeline-steps">
+            {[
+              { key: 'new', stepNum: 1, title: 'Mới', desc: 'Đơn vừa tiếp nhận' },
+              { key: 'consulting', stepNum: 2, title: 'Đang tư vấn', desc: 'Đang trao đổi lịch trình' },
+              { key: 'closed', stepNum: 3, title: 'Đã chốt', desc: 'Chốt tour thành công' },
+            ].map((st, idx) => {
+              const isActive = order.status === st.key;
+              const stepIndex = ['new', 'consulting', 'closed'].indexOf(order.status);
+              const isCompleted = stepIndex >= idx;
+
+              return (
+                <button
+                  key={st.key}
+                  type="button"
+                  className={`od-step-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => handleQuickStatus(st.key as OrderStatus)}
+                  title={`Bấm để chuyển trạng thái thành ${st.title}`}
+                >
+                  <div className="od-step-number" style={{
+                    background: isCompleted ? `var(--status-${statusMeta[st.key as OrderStatus].varPrefix}-text)` : undefined,
+                    color: isCompleted ? '#ffffff' : undefined
+                  }}>
+                    {isCompleted && !isActive ? <Check size={14} /> : st.stepNum}
+                  </div>
+                  <div className="od-step-content">
+                    <span className="od-step-label">{st.title}</span>
+                    <span className="od-step-sub">{st.desc}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 4 Metric Cards */}
+      <div className="od-metrics-grid">
+        <div className="od-metric-card">
+          <div className="od-metric-icon blue">
+            <Compass size={20} />
+          </div>
+          <div className="od-metric-info">
+            <span className="od-metric-label">Tour du lịch</span>
+            <span className="od-metric-val" title={order.tour_name}>{order.tour_name}</span>
+          </div>
+        </div>
+
+        <div className="od-metric-card">
+          <div className="od-metric-icon amber">
+            <Users size={20} />
+          </div>
+          <div className="od-metric-info">
+            <span className="od-metric-label">Số lượng khách</span>
+            <span className="od-metric-val">{order.num_guests ? `${order.num_guests} khách` : '1 khách'}</span>
+          </div>
+        </div>
+
+        <div className="od-metric-card">
+          <div className="od-metric-icon purple">
+            <BedDouble size={20} />
+          </div>
+          <div className="od-metric-info">
+            <span className="od-metric-label">Dạng phòng</span>
+            <span className="od-metric-val">{order.room_type || 'Tiêu chuẩn'}</span>
+          </div>
+        </div>
+
+        <div className="od-metric-card">
+          <div className="od-metric-icon green">
+            <CalendarDays size={20} />
+          </div>
+          <div className="od-metric-info">
+            <span className="od-metric-label">Ngày khởi hành</span>
+            <span className="od-metric-val">
+              {new Date(order.tour_date).toLocaleDateString('vi-VN')}
+            </span>
+          </div>
+        </div>
+
+        <div className="od-metric-card">
+          <div className="od-metric-icon amber">
+            <Star size={20} className="star-filled" />
+          </div>
+          <div className="od-metric-info">
+            <span className="od-metric-label">Hạng sao</span>
+            <span className="od-metric-val">{order.rating ? `${order.rating} sao` : '5 sao'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main 2-Column Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+        {/* Left Column: Trip Overview & Notes */}
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          
+          {/* Timeline Card */}
+          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-main)] p-6 shadow-sm">
+            <h2 className="text-[13px] font-bold uppercase tracking-wider text-[var(--text-dim)] mb-6">
+              Hành trình chuyến đi
+            </h2>
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-0">
+              <div className="text-center md:text-left w-full md:w-auto">
+                <div className="text-[11px] text-[var(--text-dim)] uppercase tracking-widest mb-2">Ngày tạo đơn</div>
+                <div className="text-lg font-bold text-[var(--text-heading)]">{new Date(order.booking_date).toLocaleDateString('vi-VN')}</div>
+              </div>
+
+              <div className="flex-1 px-4 md:px-8 flex flex-col items-center gap-3 w-full md:w-auto">
+                <span className="text-xs font-semibold px-4 py-1.5 rounded-full" style={{ background: 'var(--status-new-bg)', color: 'var(--status-new-text)', border: '1px solid var(--status-new-text)' }}>
+                  {diffDays > 0 ? `Còn ${diffDays} ngày nữa khởi hành` : diffDays === 0 ? 'Khởi hành hôm nay 🎉' : 'Đã khởi hành'}
+                </span>
+                
+                {/* Horizontal line for desktop */}
+                <div className="hidden md:flex w-full items-center gap-2">
+                  <div className="flex-1 h-[1px] opacity-30 border-t border-dashed" style={{ borderColor: 'var(--text-main)' }} />
+                  <ArrowRight size={16} style={{ color: 'var(--text-dim)' }} />
+                </div>
+                {/* Vertical line for mobile */}
+                <div className="flex md:hidden h-8 w-[1px] opacity-30 border-l border-dashed" style={{ borderColor: 'var(--text-main)' }} />
+              </div>
+
+              <div className="text-center md:text-right w-full md:w-auto">
+                <div className="text-[11px] text-[var(--text-dim)] uppercase tracking-widest mb-2">Ngày đi tour</div>
+                <div className="text-lg font-bold text-[var(--text-heading)]">{new Date(order.tour_date).toLocaleDateString('vi-VN')}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Notes Card */}
+          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-main)] p-6 shadow-sm flex flex-col h-full">
+             <h2 className="text-[13px] font-bold uppercase tracking-wider text-[var(--text-dim)] mb-4">
+               Ghi chú
+             </h2>
+             <div className="text-[13px] leading-relaxed whitespace-pre-wrap bg-[var(--bg-body)] p-4 rounded-lg border border-[var(--border-subtle)] text-[var(--text-main)] flex-1">
+               {order.notes ? order.notes : <span className="italic opacity-60">Chưa có ghi chú cho đơn tour này.</span>}
+             </div>
+          </div>
+        </div>
+
+        {/* Right Column: Customer & Staff */}
+        <div className="flex flex-col gap-6">
+          
+          {/* Customer Card */}
+          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-main)] p-6 shadow-sm">
+            <h2 className="text-[13px] font-bold uppercase tracking-wider text-[var(--text-dim)] mb-6">
+              Thông tin khách hàng
+            </h2>
+            
+            <div className="flex items-center gap-4 mb-4">
+              <div>
+                <span className="text-[11px] text-[var(--text-dim)] uppercase tracking-widest block mb-1">Tên khách hàng</span>
+                <h3 className="text-lg font-bold text-[var(--text-heading)]">{order.customer_name}</h3>
+              </div>
+            </div>
+
+            <div className="bg-[var(--bg-body)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
+              <div className="flex items-center justify-between p-3.5 transition-colors hover:bg-[var(--bg-hover)]">
+                <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center">
+                    <Phone size={14} />
+                  </div>
+                  <span className="font-medium">{order.customer_phone}</span>
+                </div>
+                <div className="flex gap-1">
+                  <a href={`tel:${order.customer_phone}`} className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors" title="Gọi điện">
+                    <PhoneCall size={14} />
+                  </a>
+                  <button type="button" onClick={() => handleCopy(order.customer_phone, 'phone')} className="p-1.5 text-[var(--text-dim)] hover:bg-[var(--border-subtle)] rounded-md transition-colors" title="Copy">
+                    {copiedPhone ? <CheckCheck size={14} style={{ color: '#10b981' }} /> : <Copy size={14} />}
+                  </button>
+                </div>
+              </div>
+
+              {order.customer_email ? (
+                <div className="flex items-center justify-between p-3.5 border-t border-[var(--border-subtle)] border-dashed transition-colors hover:bg-[var(--bg-hover)]">
+                  <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center">
+                      <Mail size={14} />
+                    </div>
+                    <span className="font-medium truncate max-w-[150px]" title={order.customer_email}>{order.customer_email}</span>
+                  </div>
+                  <a href={`mailto:${order.customer_email}`} className="p-1.5 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-md transition-colors" title="Gửi email">
+                    <Mail size={14} />
+                  </a>
+                </div>
+              ) : (
+                <div className="flex items-center p-3.5 border-t border-[var(--border-subtle)] border-dashed text-xs italic text-[var(--text-dim)] opacity-60">
+                  Chưa cập nhật email
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Staff Card */}
+          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-main)] p-6 shadow-sm">
+            <h2 className="text-[13px] font-bold uppercase tracking-wider text-[var(--text-dim)] mb-6">
+              Nhân sự phụ trách
+            </h2>
+            <div className="flex items-center gap-4">
+              <Avatar src={order.owner?.avatar_url} name={order.owner?.display_name} size="md" />
+              <div className="flex flex-col">
+                <b className="text-[14px] text-[var(--text-heading)]">
+                  {order.owner?.display_name || 'Chưa phân công'}
+                </b>
+              </div>
+            </div>
+          </div>
+
+          {/* Meta Info */}
+          <div className="px-4 flex flex-col gap-3 text-xs text-[var(--text-dim)]">
+            <div className="flex justify-between items-center border-b border-[var(--border-subtle)] pb-2">
+              <span>Ngày tạo đơn</span>
+              <span className="font-medium text-[var(--text-main)]">{new Date(order.created_at).toLocaleString('vi-VN')}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Cập nhật lần cuối</span>
+              <span className="font-medium text-[var(--text-main)]">{new Date(order.updated_at).toLocaleString('vi-VN')}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function Dashboard() { const [orders, setOrders] = useState<Order[]>([]); useEffect(() => { supabase.from('orders').select('*').then(({ data }) => setOrders((data || []) as Order[])); }, []); const counts = Object.keys(statusMeta).map(status => ({ status: status as OrderStatus, count: orders.filter(o => o.status === status).length })); const total = orders.length; return <><PageHeader eyebrow="Tổng quan hệ thống" title="Bảng điều khiển" description="Theo dõi hiệu suất vận hành tour trong nháy mắt." actions={<Button variant="secondary"><CalendarDays size={16} /> Tháng này <ChevronDown size={14} /></Button>} /><div className="kpi-grid"><Kpi icon={<ClipboardList />} label="Tổng đơn tour" value={String(total || 0)} trend="12.5%" color="blue" /><Kpi icon={<TrendingUp />} label="Đơn đang xử lý" value={String(orders.filter(o => ['new', 'confirmed', 'deposited'].includes(o.status)).length)} trend="8.2%" color="amber" /><Kpi icon={<Check />} label="Hoàn thành" value={String(orders.filter(o => o.status === 'completed').length)} trend="16.4%" color="green" /><Kpi icon={<CircleDollarSign />} label="Tỷ lệ hoàn thành" value={total ? `${Math.round(orders.filter(o => o.status === 'completed').length / total * 100)}%` : '0%'} trend="4.8%" color="violet" /></div><div className="dashboard-grid"><Card><div className="card-heading-row"><div><h2>Đơn theo trạng thái</h2><p>Phân bổ toàn bộ đơn tour</p></div><MoreHorizontal size={18} /></div><div className="status-chart">{counts.map(item => <div className="chart-row" key={item.status}><div className="chart-label"><i style={{ background: `var(--status-${statusMeta[item.status].varPrefix}-text)` }} />{statusMeta[item.status].label}<b>{item.count}</b></div><div className="bar-track"><span style={{ width: `${total ? Math.max(4, item.count / Math.max(total, 1) * 100) : 4}%`, background: `var(--status-${statusMeta[item.status].varPrefix}-text)` }} /></div></div>)}</div></Card><Card><div className="card-heading-row"><div><h2>Xu hướng đơn tour</h2><p>Trong 7 ngày gần nhất</p></div><select className="mini-select"><option>7 ngày</option><option>30 ngày</option></select></div><div className="line-chart"><div className="grid-lines"><i /><i /><i /><i /></div><svg viewBox="0 0 600 180" preserveAspectRatio="none"><defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#60A5FA" stopOpacity=".25" /><stop offset="1" stopColor="#60A5FA" stopOpacity="0" /></linearGradient></defs><path d="M0 145 C45 125, 65 137, 105 112 S165 120, 205 95 S275 119, 315 84 S370 105, 415 72 S475 86, 520 52 S565 62, 600 32 V180 H0Z" fill="url(#chartFill)" /><path d="M0 145 C45 125, 65 137, 105 112 S165 120, 205 95 S275 119, 315 84 S370 105, 415 72 S475 86, 520 52 S565 62, 600 32" fill="none" stroke="#60A5FA" strokeWidth="3" /></svg><div className="chart-days"><span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span></div></div></Card></div></>; }
-function Kpi({ icon, label, value, trend, color }: { icon: ReactNode; label: string; value: string; trend: string; color: string }) { return <Card className="kpi-card"><div className={`kpi-icon ${color}`}>{icon}</div><span className="kpi-label">{label}</span><strong>{value}</strong><span className="kpi-trend"><TrendingUp size={13} /> {trend} <em>so với tháng trước</em></span></Card>; }
+function Dashboard() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  useEffect(() => {
+    supabase.from('orders').select('*').then(({ data }) => setOrders((data || []) as Order[]));
+  }, []);
+
+  const counts = Object.keys(statusMeta).map(status => ({
+    status: status as OrderStatus,
+    count: orders.filter(o => o.status === status).length
+  }));
+  const total = orders.length;
+
+  return (
+    <>
+      <PageHeader title="Tổng quan" />
+      <div className="kpi-grid">
+        <Kpi icon={<ClipboardList />} label="Tổng đơn tour" value={String(total || 0)} color="blue" />
+        <Kpi icon={<TrendingUp />} label="Đang tư vấn" value={String(orders.filter(o => o.status === 'consulting').length)} color="amber" />
+        <Kpi icon={<Check />} label="Đã chốt" value={String(orders.filter(o => o.status === 'closed').length)} color="green" />
+        <Kpi icon={<CircleDollarSign />} label="Tỷ lệ chốt đơn" value={total ? `${Math.round(orders.filter(o => o.status === 'closed').length / total * 100)}%` : '0%'} color="violet" />
+      </div>
+      <div className="dashboard-grid">
+        <Card>
+          <div className="card-heading-row">
+            <div>
+              <h2>Đơn theo trạng thái</h2>
+              <p>Phân bổ toàn bộ đơn tour</p>
+            </div>
+            <MoreHorizontal size={18} />
+          </div>
+          <div className="status-chart">
+            {counts.map(item => (
+              <div className="chart-row" key={item.status}>
+                <div className="chart-label">
+                  <i style={{ background: `var(--status-${statusMeta[item.status].varPrefix}-text)` }} />
+                  {statusMeta[item.status].label}
+                  <b>{item.count}</b>
+                </div>
+                <div className="bar-track">
+                  <span style={{ width: `${total ? Math.max(4, item.count / Math.max(total, 1) * 100) : 4}%`, background: `var(--status-${statusMeta[item.status].varPrefix}-text)` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <div className="card-heading-row">
+            <div>
+              <h2>Xu hướng đơn tour</h2>
+              <p>Trong 7 ngày gần nhất</p>
+            </div>
+            <select className="mini-select">
+              <option>7 ngày</option>
+              <option>30 ngày</option>
+            </select>
+          </div>
+          <div className="line-chart">
+            <div className="grid-lines"><i /><i /><i /><i /></div>
+            <svg viewBox="0 0 600 180" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0" stopColor="#60A5FA" stopOpacity=".25" />
+                  <stop offset="1" stopColor="#60A5FA" stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              <path d="M0 145 C45 125, 65 137, 105 112 S165 120, 205 95 S275 119, 315 84 S370 105, 415 72 S475 86, 520 52 S565 62, 600 32 V180 H0Z" fill="url(#chartFill)" />
+              <path d="M0 145 C45 125, 65 137, 105 112 S165 120, 205 95 S275 119, 315 84 S370 105, 415 72 S475 86, 520 52 S565 62, 600 32" fill="none" stroke="#60A5FA" strokeWidth="3" />
+            </svg>
+            <div className="chart-days">
+              <span>T2</span><span>T3</span><span>T4</span><span>T5</span><span>T6</span><span>T7</span><span>CN</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
+function Kpi({ icon, label, value, color }: { icon: ReactNode; label: string; value: string; color: string }) { return <Card className="kpi-card"><div className={`kpi-icon ${color}`}>{icon}</div><span className="kpi-label">{label}</span><strong>{value}</strong></Card>; }
 
 // Tự sinh username từ tên hiển thị: bỏ dấu, viết thường, nối bằng dấu chấm, thêm 4 ký tự ngẫu nhiên
 function generateUsername(displayName: string): string {
@@ -796,7 +1550,7 @@ function SalersPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Quản trị người dùng" title="Nhân viên Sale" description="Quản lý tài khoản và quyền truy cập của đội ngũ bán hàng." actions={<Button onClick={() => setShowModal(true)}><Plus size={16} /> Tạo nhân viên mới</Button>} />
+      <PageHeader title="Nhân viên Sale" actions={<Button onClick={() => setShowModal(true)}><Plus size={16} /> Tạo nhân viên mới</Button>} />
 
       {/* Modal Tạo nhân viên mới */}
       {showModal && (
@@ -811,7 +1565,7 @@ function SalersPage() {
                 label="Họ và tên"
                 value={form.display_name}
                 onChange={handleDisplayNameChange}
-                placeholder="Nguyễn Văn An"
+                placeholder="Nhập họ và tên"
                 required
               />
               <div style={{ position: 'relative' }}>
@@ -819,7 +1573,7 @@ function SalersPage() {
                   label="Username đăng nhập"
                   value={form.username}
                   onChange={handleUsernameChange}
-                  placeholder="nguyen.van.an.xxxx"
+                  placeholder="Nhập username"
                   icon={<User size={15} />}
                   required
                 />
@@ -831,7 +1585,7 @@ function SalersPage() {
                 label="Email đăng nhập"
                 value={form.email}
                 onChange={v => setForm(p => ({ ...p, email: v }))}
-                placeholder="nhanvien@tourflow.vn"
+                placeholder="Nhập email"
                 type="email"
                 icon={<Mail size={15} />}
                 required
@@ -868,14 +1622,14 @@ function SalersPage() {
                 label="Họ và tên"
                 value={editForm.display_name}
                 onChange={v => setEditForm(p => ({ ...p, display_name: v }))}
-                placeholder="Nguyễn Văn An"
+                placeholder="Nhập họ và tên"
                 required
               />
               <Input
                 label="Username đăng nhập"
                 value={editForm.username}
                 onChange={v => setEditForm(p => ({ ...p, username: v.toLowerCase().replace(/[^a-z0-9._-]/g, '') }))}
-                placeholder="username_sale"
+                placeholder="Nhập username"
                 icon={<User size={15} />}
                 required
               />
@@ -883,7 +1637,7 @@ function SalersPage() {
                 label="Email đăng nhập"
                 value={editForm.email}
                 onChange={v => setEditForm(p => ({ ...p, email: v }))}
-                placeholder="nhanvien@tourflow.vn"
+                placeholder="Nhập email"
                 type="email"
                 icon={<Mail size={15} />}
                 required
@@ -926,7 +1680,7 @@ function SalersPage() {
                 <tr><td colSpan={7}><div className="empty-state compact"><Users size={28} /><h3>Chưa có nhân viên nào</h3><p>Bấm "Tạo nhân viên mới" để bắt đầu.</p></div></td></tr>
               ) : filtered.map((profile, index) => (
                 <tr key={profile.id} style={{ position: 'relative', zIndex: openMenu === profile.id ? 40 : 1 }}>
-                  <td><div className="owner-cell"><span className="avatar">{(profile.display_name || 'NV').slice(0, 2).toUpperCase()}</span><b>{profile.display_name}</b></div></td>
+                  <td><div className="owner-cell"><Avatar src={profile.avatar_url} name={profile.display_name} size="sm" /><b>{profile.display_name}</b></div></td>
                   <td className="mono">@{profile.username}</td>
                   <td className="muted">{profile.email}</td>
                   <td><span className="role-pill">{profile.role === 'admin' ? 'Admin' : 'Sale Executive'}</span></td>
@@ -981,6 +1735,7 @@ function removeVietnameseTones(str: string): string {
 }
 
 function ActivityPage() {
+  const navigate = useNavigate();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -988,7 +1743,7 @@ function ActivityPage() {
   async function loadLogs() {
     const { data } = await supabase
       .from('activity_logs')
-      .select('*, actor:profiles(display_name, username)')
+      .select('*, actor:profiles!activity_logs_actor_id_fkey(display_name, username, avatar_url)')
       .order('created_at', { ascending: false })
       .limit(150);
     setLogs((data || []) as ActivityLog[]);
@@ -1034,9 +1789,7 @@ function ActivityPage() {
   return (
     <>
       <PageHeader
-        eyebrow="Theo dõi hệ thống"
         title="Lịch sử hoạt động"
-        description="Nhật ký hành động của đội ngũ được cập nhật theo thời gian thực."
         actions={<span className="live-status large"><i /> LIVE · Đang cập nhật</span>}
       />
       <Card>
@@ -1083,20 +1836,31 @@ function ActivityPage() {
                 </Button>
               </div>
             ) : (
-              filteredLogs.map(log => (
-                <div className={`activity-item ${log.action_type}`} key={log.id}>
-                  <span className="activity-time">{new Date(log.created_at).toLocaleTimeString('vi-VN')}</span>
-                  <span className="avatar small">{(log.actor?.display_name || 'SY').slice(0, 2).toUpperCase()}</span>
-                  <div>
-                    <b>
-                      {log.actor?.display_name || 'Hệ thống'}{' '}
-                      <span className="mono">@{log.actor?.username || 'system'}</span>
-                    </b>
-                    <p>{log.description}</p>
+              filteredLogs.map(log => {
+                const match = log.description.match(/ORD-[A-Za-z0-9]+/i);
+                const orderCode = match ? match[0] : null;
+                const isNavigable = ['create_order', 'update_status', 'update_order'].includes(log.action_type) && !!orderCode;
+
+                return (
+                  <div
+                    className={`activity-item ${log.action_type} ${isNavigable ? 'clickable' : ''}`}
+                    key={log.id}
+                    onClick={isNavigable ? () => navigate(`/orders/${orderCode}`) : undefined}
+                    title={isNavigable ? `Nhấn để xem chi tiết đơn tour ${orderCode}` : undefined}
+                  >
+                    <span className="activity-time">{new Date(log.created_at).toLocaleTimeString('vi-VN')}</span>
+                    <Avatar src={log.actor?.avatar_url} name={log.actor?.display_name} size="sm" />
+                    <div className="activity-item-content">
+                      <b>
+                        {log.actor?.display_name || 'Hệ thống'}{' '}
+                        <span className="mono">@{log.actor?.username || 'system'}</span>
+                      </b>
+                      <p>{log.description}</p>
+                    </div>
+                    <span className="activity-date">{new Date(log.created_at).toLocaleDateString('vi-VN')}</span>
                   </div>
-                  <span className="activity-date">{new Date(log.created_at).toLocaleDateString('vi-VN')}</span>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
@@ -1161,7 +1925,7 @@ function ChangePassword() {
 
   return (
     <>
-      <PageHeader eyebrow="Cài đặt tài khoản" title="Đổi mật khẩu" description="Giữ tài khoản của bạn luôn an toàn." />
+      <PageHeader title="Đổi mật khẩu" />
       <Card className="password-card">
         <div className="card-title">
           <span className="section-icon"><Lock size={17} /></span>
@@ -1481,6 +2245,8 @@ function App() {
             <Route path="admin/orders" element={<OrdersPage admin />} />
             <Route path="admin/salers" element={<SalersPage />} />
             <Route path="admin/activity" element={<ActivityPage />} />
+            <Route path="profile" element={<ProfileRoute />} />
+            <Route path="admin/settings" element={<AdminSettingsRoute />} />
             <Route path="settings/change-password" element={<ChangePassword />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -1488,6 +2254,19 @@ function App() {
       </BrowserRouter>
     </ThemeContext.Provider>
   );
+}
+
+function ProfileRoute() {
+  const { profile, setProfile } = useOutletContext<{ profile: Profile | null; setProfile: (p: Profile) => void }>();
+  return <ProfilePage profile={profile} onProfileUpdated={setProfile} />;
+}
+
+function AdminSettingsRoute() {
+  const { profile } = useOutletContext<{ profile: Profile | null }>();
+  if (profile && profile.role !== 'admin') {
+    return <Navigate to="/orders" replace />;
+  }
+  return <AdminSettingsPage />;
 }
 
 function RoleRedirect() { const [role, setRole] = useState<Role | null>(null); useEffect(() => { (async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) { setRole('saler'); return; } const { data } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle(); setRole((data?.role as Role) || 'saler'); })(); }, []); if (!role) return <div className="loading-screen">Đang chuẩn bị không gian làm việc...</div>; return <Navigate to={role === 'admin' ? '/dashboard' : '/orders'} replace />; }
