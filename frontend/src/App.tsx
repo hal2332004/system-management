@@ -971,7 +971,139 @@ function SalersPage() {
   );
 }
 
-function ActivityPage() { const [logs, setLogs] = useState<ActivityLog[]>([]); useEffect(() => { supabase.from('activity_logs').select('*, actor:profiles(display_name, username)').order('created_at', { ascending: false }).limit(30).then(({ data }) => setLogs((data || []) as ActivityLog[])); }, []); return <><PageHeader eyebrow="Theo dõi hệ thống" title="Lịch sử hoạt động" description="Nhật ký hành động của đội ngũ được cập nhật theo thời gian thực." actions={<span className="live-status large"><i /> LIVE · Đang cập nhật</span>} /><Card><div className="activity-filters"><div className="search-field"><Search size={17} /><input placeholder="Tìm nhân viên Sale..." /></div><Button variant="secondary">Loại hoạt động <ChevronDown size={14} /></Button><Button variant="secondary"><CalendarDays size={15} /> Hôm nay</Button></div><div className="activity-list">{logs.length === 0 ? <div className="empty-state compact"><Activity size={28} /><h3>Chưa có hoạt động</h3><p>Nhật ký hệ thống sẽ hiển thị tại đây.</p></div> : logs.map(log => <div className={`activity-item ${log.action_type}`} key={log.id}><span className="activity-time">{new Date(log.created_at).toLocaleTimeString('vi-VN')}</span><span className="avatar small">{(log.actor?.display_name || 'SY').slice(0, 2).toUpperCase()}</span><div><b>{log.actor?.display_name || 'Hệ thống'} <span className="mono">@{log.actor?.username || 'system'}</span></b><p>{log.description}</p></div><span className="activity-date">{new Date(log.created_at).toLocaleDateString('vi-VN')}</span></div>)}</div></Card></>; }
+function removeVietnameseTones(str: string): string {
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+}
+
+function ActivityPage() {
+  const [logs, setLogs] = useState<ActivityLog[]>([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  async function loadLogs() {
+    const { data } = await supabase
+      .from('activity_logs')
+      .select('*, actor:profiles(display_name, username)')
+      .order('created_at', { ascending: false })
+      .limit(150);
+    setLogs((data || []) as ActivityLog[]);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadLogs();
+    const channel = supabase
+      .channel('realtime-activity-logs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activity_logs' }, () => {
+        loadLogs();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const filteredLogs = useMemo(() => {
+    if (!query.trim()) return logs;
+    const q = query.trim().toLowerCase();
+    const qNorm = removeVietnameseTones(q);
+
+    return logs.filter(log => {
+      const name = (log.actor?.display_name || '').toLowerCase();
+      const nameNorm = removeVietnameseTones(name);
+      const username = (log.actor?.username || '').toLowerCase();
+      const desc = (log.description || '').toLowerCase();
+      const descNorm = removeVietnameseTones(desc);
+
+      return (
+        name.includes(q) ||
+        nameNorm.includes(qNorm) ||
+        username.includes(q) ||
+        desc.includes(q) ||
+        descNorm.includes(qNorm)
+      );
+    });
+  }, [logs, query]);
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Theo dõi hệ thống"
+        title="Lịch sử hoạt động"
+        description="Nhật ký hành động của đội ngũ được cập nhật theo thời gian thực."
+        actions={<span className="live-status large"><i /> LIVE · Đang cập nhật</span>}
+      />
+      <Card>
+        <div className="activity-filters" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="search-field">
+            <Search size={17} />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Tìm nhân viên Sale..."
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', padding: 0 }}
+                title="Xóa tìm kiếm"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+            Hiển thị <b>{filteredLogs.length}</b> {query ? `/ ${logs.length}` : ''} hoạt động
+          </span>
+        </div>
+        {loading ? (
+          <div className="loading-state">Đang tải nhật ký hoạt động...</div>
+        ) : (
+          <div className="activity-list">
+            {logs.length === 0 ? (
+              <div className="empty-state compact">
+                <Activity size={28} />
+                <h3>Chưa có hoạt động</h3>
+                <p>Nhật ký hệ thống sẽ hiển thị tại đây.</p>
+              </div>
+            ) : filteredLogs.length === 0 ? (
+              <div className="empty-state compact">
+                <Search size={28} />
+                <h3>Không tìm thấy hoạt động nào</h3>
+                <p>Không có hoạt động nào khớp với nhân viên "{query}".</p>
+                <Button variant="secondary" onClick={() => setQuery('')} style={{ marginTop: '10px' }}>
+                  Xóa tìm kiếm
+                </Button>
+              </div>
+            ) : (
+              filteredLogs.map(log => (
+                <div className={`activity-item ${log.action_type}`} key={log.id}>
+                  <span className="activity-time">{new Date(log.created_at).toLocaleTimeString('vi-VN')}</span>
+                  <span className="avatar small">{(log.actor?.display_name || 'SY').slice(0, 2).toUpperCase()}</span>
+                  <div>
+                    <b>
+                      {log.actor?.display_name || 'Hệ thống'}{' '}
+                      <span className="mono">@{log.actor?.username || 'system'}</span>
+                    </b>
+                    <p>{log.description}</p>
+                  </div>
+                  <span className="activity-date">{new Date(log.created_at).toLocaleDateString('vi-VN')}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </Card>
+    </>
+  );
+}
 
 function ChangePassword() {
   const [current, setCurrent] = useState('');
