@@ -699,6 +699,7 @@ function AppLayout() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const today = new Date().toLocaleDateString("vi-VN", {
     day: "2-digit",
     month: "long",
@@ -711,7 +712,10 @@ function AppLayout() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user) {
+          setLoadingProfile(false);
+          return;
+        }
         const { data } = await supabase
           .from("profiles")
           .select("*")
@@ -726,9 +730,15 @@ function AppLayout() {
         if (p) setProfile(p);
       } catch (e) {
         console.error("AppLayout profile error:", e);
+      } finally {
+        setLoadingProfile(false);
       }
     })();
   }, [navigate]);
+
+  if (loadingProfile) {
+    return <div className="loading-screen">Đang tải cấu hình tài khoản...</div>;
+  }
 
   return (
     <div className="app-shell">
