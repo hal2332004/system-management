@@ -83,7 +83,9 @@ import {
   Clock,
   PhoneCall,
   ArrowRight,
+  Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { supabase, supabaseAdmin } from "@/lib/supabase";
 import type {
   ActivityLog,
@@ -130,6 +132,7 @@ function Button({
   onClick,
   disabled = false,
   style,
+  title,
 }: {
   children: ReactNode;
   variant?: "primary" | "secondary" | "ghost" | "danger";
@@ -138,6 +141,7 @@ function Button({
   onClick?: () => void;
   disabled?: boolean;
   style?: React.CSSProperties;
+  title?: string;
 }) {
   return (
     <button
@@ -146,6 +150,7 @@ function Button({
       disabled={disabled}
       style={style}
       className={`button button-${variant} ${className}`}
+      title={title}
     >
       {children}
     </button>
@@ -798,6 +803,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showDateFilters, setShowDateFilters] = useState(false);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [salers, setSalers] = useState<Profile[]>([]);
   const [showSalerDropdown, setShowSalerDropdown] = useState(false);
   const [salerSearchQuery, setSalerSearchQuery] = useState("");
@@ -1019,30 +1025,98 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
       const target = e.target as HTMLElement | null;
-      if (target && !target.closest(".filter-dropdown") && !target.closest(".saler-dropdown")) {
+      if (target && !target.closest(".filter-dropdown") && !target.closest(".saler-dropdown") && !target.closest(".export-dropdown")) {
         setShowFilters(false);
         setShowDateFilters(false);
         setShowSalerDropdown(false);
+        setShowExportDropdown(false);
       }
     }
-    if (showFilters || showDateFilters || showSalerDropdown) {
+    if (showFilters || showDateFilters || showSalerDropdown || showExportDropdown) {
       document.addEventListener("mousedown", handleOutsideClick);
     }
     return () => {
       document.removeEventListener("mousedown", handleOutsideClick);
     };
-  }, [showFilters, showDateFilters, showSalerDropdown]);
+  }, [showFilters, showDateFilters, showSalerDropdown, showExportDropdown]);
+
+  function exportData(format: "csv" | "xlsx") {
+    if (!orders || orders.length === 0) {
+      alert("Không có dữ liệu để xuất.");
+      return;
+    }
+
+    const dataToExport = orders.map((o: any) => ({
+      "Mã đơn": o.order_code,
+      "Ngày tạo đơn": o.booking_date ? new Date(o.booking_date).toLocaleDateString("vi-VN") : "",
+      "Người tạo": o.owner?.display_name || "",
+      "Khách hàng": o.customer_name,
+      "Số điện thoại": o.customer_phone,
+      "Email": o.customer_email || "",
+      "Tên Tour": o.tour_name,
+      "Loại phòng": o.room_type || "",
+      "Số khách": o.num_guests || 1,
+      "Ngày đi tour": o.tour_date ? new Date(o.tour_date).toLocaleDateString("vi-VN") : "",
+      "Trạng thái": statusMeta[o.status as OrderStatus]?.label || o.status,
+      "Đánh giá (Sao)": o.rating || "",
+      "Ghi chú": o.notes || "",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
+    
+    const fileName = `Danh_Sach_Don_Tour_${new Date().getTime()}`;
+    XLSX.writeFile(workbook, `${fileName}.${format}`);
+  }
 
   return (
     <>
       <PageHeader
         title={admin ? "Tất cả đơn tour" : "Đơn tour của tôi"}
         actions={
-          !admin && (
-            <Button onClick={() => navigate("/orders/new")}>
-              <Plus size={16} /> Tạo đơn mới
-            </Button>
-          )
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <div className="filter-dropdown export-dropdown" style={{ position: "relative" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExportDropdown(!showExportDropdown);
+                  setShowFilters(false);
+                  setShowDateFilters(false);
+                  setShowSalerDropdown(false);
+                }}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-dim)",
+                  padding: "8px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+                title="Xuất dữ liệu"
+              >
+                <Download size={18} />
+              </button>
+              {showExportDropdown && (
+                <div className="dropdown-panel" style={{ right: 0, left: "auto" }}>
+                  <button onClick={() => { exportData("xlsx"); setShowExportDropdown(false); }}>
+                    Xuất Excel (XLSX)
+                  </button>
+                  <button onClick={() => { exportData("csv"); setShowExportDropdown(false); }}>
+                    Xuất CSV
+                  </button>
+                </div>
+              )}
+            </div>
+            {!admin && (
+              <Button onClick={() => navigate("/orders/new")}>
+                <Plus size={16} /> Tạo đơn mới
+              </Button>
+            )}
+          </div>
         }
       />
       <Card className="orders-card">
@@ -1084,6 +1158,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                     setShowSalerDropdown(!showSalerDropdown);
                     setShowFilters(false);
                     setShowDateFilters(false);
+                    setShowExportDropdown(false);
                   }}
                   style={{ minWidth: 200, justifyContent: "space-between" }}
                 >
@@ -1163,6 +1238,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                 onClick={() => {
                   setShowFilters(!showFilters);
                   setShowDateFilters(false);
+                  setShowExportDropdown(false);
                 }}
               >
                 <span
@@ -1207,6 +1283,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                 onClick={() => {
                   setShowDateFilters(!showDateFilters);
                   setShowFilters(false);
+                  setShowExportDropdown(false);
                 }}
                 className="date-button"
               >
