@@ -10,7 +10,7 @@ import {
 
 const ThemeContext = createContext<{ theme: string; toggleTheme: () => void }>({
   theme: "dark",
-  toggleTheme: () => {},
+  toggleTheme: () => { },
 });
 export function useTheme() {
   return useContext(ThemeContext);
@@ -37,6 +37,10 @@ import {
   Tooltip,
   Cell,
   CartesianGrid,
+  PieChart,
+  Pie,
+  Legend,
+  LabelList
 } from "recharts";
 import {
   Activity,
@@ -84,6 +88,12 @@ import {
   PhoneCall,
   ArrowRight,
   Download,
+  Facebook,
+  Instagram,
+  MessageCircle,
+  HelpCircle,
+  Globe,
+  Share2
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseAdmin } from "@/lib/supabase";
@@ -101,6 +111,7 @@ import { Avatar } from "./components/Avatar";
 import { ProfilePage } from "./components/ProfilePage";
 import { AdminSettingsPage } from "./components/AdminSettingsPage";
 import { StarRating } from "./components/StarRating";
+import { POPULAR_COUNTRIES, ALL_COUNTRIES } from "@/lib/countries";
 
 const statusMeta: Record<OrderStatus, { label: string; varPrefix: string }> = {
   new: { label: "Mới", varPrefix: "new" },
@@ -167,7 +178,6 @@ function Badge({ status }: { status: OrderStatus }) {
         background: `var(--status-${item.varPrefix}-bg)`,
       }}
     >
-      <i style={{ background: `var(--status-${item.varPrefix}-text)` }} />
       {item.label}
     </span>
   );
@@ -227,14 +237,14 @@ function Input({
   max?: number | string;
   step?: number | string;
   inputMode?:
-    | "none"
-    | "text"
-    | "tel"
-    | "url"
-    | "email"
-    | "numeric"
-    | "decimal"
-    | "search";
+  | "none"
+  | "text"
+  | "tel"
+  | "url"
+  | "email"
+  | "numeric"
+  | "decimal"
+  | "search";
 }) {
   return (
     <label className="field">
@@ -527,40 +537,40 @@ function Sidebar({ profile }: { profile: Profile | null }) {
   const isAdmin = profile?.role === "admin";
   const nav = isAdmin
     ? [
-        {
-          label: "Tổng quan",
-          to: "/dashboard",
-          icon: <LayoutDashboard size={18} />,
-        },
-        {
-          label: "Tất cả đơn tour",
-          to: "/admin/orders",
-          icon: <ClipboardList size={18} />,
-        },
-        {
-          label: "Nhân viên Sale",
-          to: "/admin/salers",
-          icon: <Users size={18} />,
-        },
-        {
-          label: "Lịch sử hoạt động hệ thống",
-          to: "/admin/activity",
-          icon: <Activity size={18} />,
-        },
-        {
-          label: "Cài đặt hệ thống",
-          to: "/admin/settings",
-          icon: <Settings size={18} />,
-        },
-      ]
+      {
+        label: "Tổng quan",
+        to: "/dashboard",
+        icon: <LayoutDashboard size={18} />,
+      },
+      {
+        label: "Tất cả đơn tour",
+        to: "/admin/orders",
+        icon: <ClipboardList size={18} />,
+      },
+      {
+        label: "Nhân viên Sale",
+        to: "/admin/salers",
+        icon: <Users size={18} />,
+      },
+      {
+        label: "Lịch sử hoạt động hệ thống",
+        to: "/admin/activity",
+        icon: <Activity size={18} />,
+      },
+      {
+        label: "Cài đặt hệ thống",
+        to: "/admin/settings",
+        icon: <Settings size={18} />,
+      },
+    ]
     : [
-        {
-          label: "Đơn của tôi",
-          to: "/orders",
-          icon: <ClipboardList size={18} />,
-        },
-        { label: "Tạo đơn mới", to: "/orders/new", icon: <Plus size={18} /> },
-      ];
+      {
+        label: "Đơn của tôi",
+        to: "/orders",
+        icon: <ClipboardList size={18} />,
+      },
+      { label: "Tạo đơn mới", to: "/orders/new", icon: <Plus size={18} /> },
+    ];
 
   async function logout() {
     sessionStorage.removeItem("skip_recovery");
@@ -810,7 +820,16 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [showSearchBar, setShowSearchBar] = useState(false);
   const PAGE_SIZE = 10;
+
+  const activeSearchCount = [
+    Boolean(queryName),
+    Boolean(queryPhone),
+    Boolean(queryEmail),
+    Boolean(queryTour),
+    Boolean(querySaler),
+  ].filter(Boolean).length;
 
   async function load() {
     setLoading(true);
@@ -907,15 +926,15 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
           matchDate =
             targetDate >= today &&
             targetDate <=
-              new Date(
-                today.getFullYear(),
-                today.getMonth(),
-                today.getDate(),
-                23,
-                59,
-                59,
-                999,
-              );
+            new Date(
+              today.getFullYear(),
+              today.getMonth(),
+              today.getDate(),
+              23,
+              59,
+              59,
+              999,
+            );
         } else if (dateRange === "yesterday") {
           const yest = new Date(today);
           yest.setDate(today.getDate() - 1);
@@ -1065,7 +1084,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Orders");
-    
+
     const fileName = `Danh_Sach_Don_Tour_${new Date().getTime()}`;
     XLSX.writeFile(workbook, `${fileName}.${format}`);
   }
@@ -1121,114 +1140,44 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
       />
       <Card className="orders-card">
         <div className="toolbar">
-          <div className="filter-row">
-            <div className="search-field">
-              <input
-                value={queryName}
-                onChange={(e) => setQueryName(e.target.value)}
-                placeholder="Tên khách hàng"
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <Button
+              variant={showSearchBar || activeSearchCount > 0 ? "primary" : "secondary"}
+              onClick={() => setShowSearchBar(!showSearchBar)}
+              style={{ gap: "8px", fontWeight: 600 }}
+              title="Bấm để mở hoặc ẩn thanh tìm kiếm"
+            >
+              <Search size={14} />
+              <span>Tìm kiếm</span>
+              {activeSearchCount > 0 && (
+                <span className="search-active-pill">
+                  {activeSearchCount}
+                </span>
+              )}
+              <ChevronDown
+                size={14}
+                style={{
+                  transform: showSearchBar ? "rotate(180deg)" : "rotate(0)",
+                  transition: "transform 0.2s ease",
+                }}
               />
-            </div>
-            <div className="search-field">
-              <input
-                value={queryPhone}
-                onChange={(e) => setQueryPhone(e.target.value)}
-                placeholder="Số điện thoại"
-              />
-            </div>
-            <div className="search-field">
-              <input
-                value={queryEmail}
-                onChange={(e) => setQueryEmail(e.target.value)}
-                placeholder="Email"
-              />
-            </div>
-            <div className="search-field">
-              <input
-                value={queryTour}
-                onChange={(e) => setQueryTour(e.target.value)}
-                placeholder="Tên tour"
-              />
-            </div>
-            {admin && (
-              <div className="saler-dropdown" style={{ position: "relative" }}>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowSalerDropdown(!showSalerDropdown);
-                    setShowFilters(false);
-                    setShowDateFilters(false);
-                    setShowExportDropdown(false);
-                  }}
-                  style={{ minWidth: 200, justifyContent: "space-between" }}
-                >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {querySaler
-                      ? salers.find((s) => s.id === querySaler)?.display_name || "Nhân viên Sale"
-                      : "Tất cả nhân viên Sale"}
-                  </span>
-                  <ChevronDown size={15} />
-                </Button>
-                {showSalerDropdown && (
-                  <div className="dropdown-panel" style={{ minWidth: 250, zIndex: 10, position: 'absolute', top: '100%', marginTop: 8, left: 0 }}>
-                    <div style={{ padding: "8px", borderBottom: "1px solid var(--border)" }}>
-                      <input
-                        type="text"
-                        placeholder="Tìm theo tên/email..."
-                        value={salerSearchQuery}
-                        onChange={(e) => setSalerSearchQuery(e.target.value)}
-                        style={{
-                          width: "100%",
-                          padding: "6px 12px",
-                          borderRadius: "4px",
-                          border: "1px solid var(--border)",
-                          background: "var(--background)",
-                          color: "var(--text)",
-                        }}
-                        autoFocus
-                      />
-                    </div>
-                    <div style={{ maxHeight: 200, overflowY: "auto" }}>
-                      <button
-                        className={!querySaler ? "active" : ""}
-                        onClick={() => {
-                          setQuerySaler("");
-                          setShowSalerDropdown(false);
-                          setSalerSearchQuery("");
-                        }}
-                      >
-                        Tất cả nhân viên Sale
-                      </button>
-                      {salers
-                        .filter(
-                          (s) =>
-                            s.display_name.toLowerCase().includes(salerSearchQuery.toLowerCase()) ||
-                            (s.email && s.email.toLowerCase().includes(salerSearchQuery.toLowerCase()))
-                        )
-                        .map((s) => (
-                          <button
-                            key={s.id}
-                            className={querySaler === s.id ? "active" : ""}
-                            onClick={() => {
-                              setQuerySaler(s.id);
-                              setShowSalerDropdown(false);
-                              setSalerSearchQuery("");
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {s.avatar_url ? (
-                                <img src={s.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
-                              ) : (
-                                <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--border)' }} />
-                              )}
-                              <span>{s.display_name}</span>
-                            </div>
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+            </Button>
+            {activeSearchCount > 0 && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setQueryName("");
+                  setQueryPhone("");
+                  setQueryEmail("");
+                  setQueryTour("");
+                  setQuerySaler("");
+                }}
+                title="Xóa tất cả tìm kiếm"
+                style={{ fontSize: "11px", color: "var(--text-muted)", gap: "4px" }}
+              >
+                <X size={13} />
+                <span>Xóa tìm kiếm</span>
+              </Button>
             )}
           </div>
           <div className="toolbar-actions">
@@ -1460,6 +1409,164 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
             </div>
           </div>
         </div>
+        {showSearchBar && (
+          <div className="toolbar-search-expanded">
+            <div className="filter-row">
+              <div className="search-field">
+                <Search size={13} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
+                <input
+                  value={queryName}
+                  onChange={(e) => setQueryName(e.target.value)}
+                  placeholder="Tên khách hàng..."
+                />
+                {queryName && (
+                  <button
+                    type="button"
+                    onClick={() => setQueryName("")}
+                    className="search-clear-btn"
+                    title="Xóa"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <div className="search-field">
+                <Phone size={13} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
+                <input
+                  value={queryPhone}
+                  onChange={(e) => setQueryPhone(e.target.value)}
+                  placeholder="Số điện thoại..."
+                />
+                {queryPhone && (
+                  <button
+                    type="button"
+                    onClick={() => setQueryPhone("")}
+                    className="search-clear-btn"
+                    title="Xóa"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <div className="search-field">
+                <Mail size={13} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
+                <input
+                  value={queryEmail}
+                  onChange={(e) => setQueryEmail(e.target.value)}
+                  placeholder="Email..."
+                />
+                {queryEmail && (
+                  <button
+                    type="button"
+                    onClick={() => setQueryEmail("")}
+                    className="search-clear-btn"
+                    title="Xóa"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              <div className="search-field">
+                <Compass size={13} style={{ color: "var(--text-dim)", flexShrink: 0 }} />
+                <input
+                  value={queryTour}
+                  onChange={(e) => setQueryTour(e.target.value)}
+                  placeholder="Tên tour..."
+                />
+                {queryTour && (
+                  <button
+                    type="button"
+                    onClick={() => setQueryTour("")}
+                    className="search-clear-btn"
+                    title="Xóa"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              {admin && (
+                <div className="saler-dropdown" style={{ position: "relative" }}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setShowSalerDropdown(!showSalerDropdown);
+                      setShowFilters(false);
+                      setShowDateFilters(false);
+                      setShowExportDropdown(false);
+                    }}
+                    style={{ minWidth: 180, justifyContent: "space-between" }}
+                  >
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {querySaler
+                        ? salers.find((s) => s.id === querySaler)?.display_name || "Nhân viên Sale"
+                        : "Tất cả nhân viên Sale"}
+                    </span>
+                    <ChevronDown size={15} />
+                  </Button>
+                  {showSalerDropdown && (
+                    <div className="dropdown-panel" style={{ minWidth: 250, zIndex: 10, position: 'absolute', top: '100%', marginTop: 8, left: 0 }}>
+                      <div style={{ padding: "8px", borderBottom: "1px solid var(--border)" }}>
+                        <input
+                          type="text"
+                          placeholder="Tìm theo tên/email..."
+                          value={salerSearchQuery}
+                          onChange={(e) => setSalerSearchQuery(e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "6px 12px",
+                            borderRadius: "4px",
+                            border: "1px solid var(--border)",
+                            background: "var(--background)",
+                            color: "var(--text)",
+                          }}
+                          autoFocus
+                        />
+                      </div>
+                      <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                        <button
+                          className={!querySaler ? "active" : ""}
+                          onClick={() => {
+                            setQuerySaler("");
+                            setShowSalerDropdown(false);
+                            setSalerSearchQuery("");
+                          }}
+                        >
+                          Tất cả nhân viên Sale
+                        </button>
+                        {salers
+                          .filter(
+                            (s) =>
+                              s.display_name.toLowerCase().includes(salerSearchQuery.toLowerCase()) ||
+                              (s.email && s.email.toLowerCase().includes(salerSearchQuery.toLowerCase()))
+                          )
+                          .map((s) => (
+                            <button
+                              key={s.id}
+                              className={querySaler === s.id ? "active" : ""}
+                              onClick={() => {
+                                setQuerySaler(s.id);
+                                setShowSalerDropdown(false);
+                                setSalerSearchQuery("");
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {s.avatar_url ? (
+                                  <img src={s.avatar_url} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover' }} />
+                                ) : (
+                                  <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--border)' }} />
+                                )}
+                                <span>{s.display_name}</span>
+                              </div>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <div className="table-meta">
           <span>
             <b>{filtered.length}</b> đơn tour
@@ -1488,7 +1595,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                 <tr>
                   <th
                     style={{
-                      width: "12%",
+                      width: admin ? '9%' : '11%',
                       cursor: "pointer",
                       userSelect: "none",
                     }}
@@ -1521,15 +1628,16 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       )}
                     </div>
                   </th>
-                  <th style={{ width: admin ? "18%" : "23%" }}>KHÁCH HÀNG</th>
-                  <th style={{ width: admin ? "15%" : "17%" }}>
+                  <th style={{ width: admin ? '13%' : '16%' }}>KHÁCH HÀNG</th>
+                  <th style={{ width: admin ? '11%' : '13%' }}>
                     SỐ ĐIỆN THOẠI
                   </th>
-                  {admin && <th style={{ width: "17%" }}>NHÂN VIÊN SALE</th>}
-                  <th style={{ width: admin ? "20%" : "22%" }}>TOUR</th>
+                  {admin && <th style={{ width: '12%' }}>NHÂN VIÊN SALE</th>}
+                  <th style={{ width: admin ? '23%' : '26%' }}>TOUR</th>
+                  <th style={{ width: admin ? '11%' : '12%' }}>QUỐC GIA</th>
                   <th
                     style={{
-                      width: "12%",
+                      width: admin ? '10%' : '11%',
                       cursor: "pointer",
                       userSelect: "none",
                     }}
@@ -1562,7 +1670,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       )}
                     </div>
                   </th>
-                  <th style={{ width: "14%" }}>TRẠNG THÁI</th>
+                  <th style={{ width: admin ? '11%' : '11%' }}>TRẠNG THÁI</th>
                 </tr>
               </thead>
               <tbody>
@@ -1588,14 +1696,11 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                         <span
                           className="customer-phone"
                           title={`Số điện thoại: ${order.customer_phone}`}
-                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Phone size={12} /> {order.customer_phone}
+                          {order.customer_phone}
                         </span>
                       ) : (
-                        <span className="customer-phone customer-phone-empty">
-                          <Phone size={12} /> Chưa có SĐT
-                        </span>
+                        <span className="muted">—</span>
                       )}
                     </td>
                     {admin && (
@@ -1610,17 +1715,97 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                         </div>
                       </td>
                     )}
-                    <td>
-                      <b className="tour-cell">{order.tour_name}</b>
+                    <td style={{ overflow: 'hidden' }}>
+                      <b className="tour-cell" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{order.tour_name}</b>
                       <div
                         style={{
                           display: "flex",
                           alignItems: "center",
-                          gap: "6px",
+                          gap: "5px",
                           flexWrap: "wrap",
-                          marginTop: "3px",
+                          marginTop: "5px",
                         }}
                       >
+                        {order.request_source && (() => {
+                          const srcConfig: Record<string, { bg: string; iconOnly?: boolean; label: string; icon: React.ReactNode }> = {
+                            FACEBOOK: {
+                              bg: '#1877F2',
+                              label: '',
+                              icon: (
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+                                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                                </svg>
+                              )
+                            },
+                            INSTAGRAM: {
+                              bg: 'linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)',
+                              label: '',
+                              icon: (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+                                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+                                </svg>
+                              )
+                            },
+                            WHATSAPP: {
+                              bg: '#25D366',
+                              label: '',
+                              icon: (
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+                                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                                </svg>
+                              )
+                            },
+                            EMAIL: {
+                              bg: '#EA4335',
+                              label: '',
+                              icon: (
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+                                  <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 010 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
+                                </svg>
+                              )
+                            },
+                            RETURNING_CUSTOMER: {
+                              bg: '#8b5cf6',
+                              label: '',
+                              icon: (
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+                                  <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+                                </svg>
+                              )
+                            },
+                            OTHER: {
+                              bg: '#6b7280',
+                              label: '',
+                              icon: (
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+                                  <circle cx="12" cy="12" r="1.5" /><circle cx="6" cy="12" r="1.5" /><circle cx="18" cy="12" r="1.5" />
+                                </svg>
+                              )
+                            }
+                          };
+                          const cfg = srcConfig[order.request_source];
+                          if (!cfg) return null;
+                          const tooltip = order.request_source === 'OTHER' && order.request_source_other
+                            ? `Nguồn: ${order.request_source_other}`
+                            : `Nguồn: ${cfg.label}`;
+                          return (
+                            <span
+                              title={tooltip}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: cfg.label ? '4px' : '0',
+                                fontSize: '11px',
+                                padding: cfg.label ? '2px 6px' : '2px 4px',
+                                borderRadius: '5px',
+                                background: cfg.bg, color: 'white', fontWeight: 600,
+                                lineHeight: '16px', letterSpacing: '0.01em',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.15)'
+                              }}
+                            >
+                              {cfg.icon}
+                              {cfg.label}
+                            </span>
+                          );
+                        })()}
                         {order.num_guests && (
                           <span
                             className="guest-badge"
@@ -1643,10 +1828,21 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                         <span
                           className="room-type-badge"
                           title={`Dạng phòng: ${order.room_type}`}
+                          style={{ marginTop: '3px', display: 'inline-block' }}
                         >
                           {order.room_type}
                         </span>
                       )}
+                    </td>
+                    <td style={{ overflow: 'hidden', maxWidth: 0 }}>
+                      {order.customer_country ? (() => {
+                        const c = ALL_COUNTRIES.find(x => x.code === order.customer_country);
+                        return (
+                          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)', fontWeight: 500, fontSize: '12px' }}>
+                            {c?.name || order.customer_country}
+                          </span>
+                        );
+                      })() : <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>—</span>}
                     </td>
                     <td className="muted">
                       {new Date(order.tour_date).toLocaleDateString("vi-VN")}
@@ -1694,6 +1890,85 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
   );
 }
 
+function CountrySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const selectedCountry = ALL_COUNTRIES.find((c) => c.code === value);
+  const displayValue = selectedCountry ? `${selectedCountry.flag} ${selectedCountry.name}` : "";
+
+  const filtered = ALL_COUNTRIES.filter((c) =>
+    c.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="field" style={{ position: "relative" }}>
+      <span>Quốc gia</span>
+      <div
+        className="input-wrap"
+        onClick={() => setOpen(true)}
+      >
+        <input
+          type="text"
+          placeholder="Tìm quốc gia..."
+          value={open ? search : displayValue}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setOpen(true);
+            if (!e.target.value) onChange("");
+          }}
+          onFocus={() => {
+            setSearch("");
+            setOpen(true);
+          }}
+          onBlur={() => {
+            setTimeout(() => setOpen(false), 200);
+          }}
+        />
+        <ChevronDown size={15} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-dim)' }} />
+      </div>
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "100%",
+            left: 0,
+            right: 0,
+            maxHeight: "200px",
+            overflowY: "auto",
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "4px",
+            zIndex: 10,
+            marginTop: "4px",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+          }}
+        >
+          {filtered.map((c) => (
+            <div
+              key={c.code}
+              style={{
+                padding: "8px 12px",
+                cursor: "pointer",
+                background: value === c.code ? "var(--bg-hover)" : "transparent",
+              }}
+              onClick={() => {
+                onChange(c.code);
+                setSearch("");
+                setOpen(false);
+              }}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {c.flag} {c.name}
+            </div>
+          ))}
+          {filtered.length === 0 && <div style={{ padding: "8px 12px", color: "var(--text-dim)" }}>Không tìm thấy</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OrderForm() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -1710,6 +1985,9 @@ function OrderForm() {
     tour_date: "",
     status: "new" as OrderStatus,
     notes: "",
+    customer_country: "",
+    request_source: "",
+    request_source_other: "",
   });
   const [tours, setTours] = useState<Tour[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
@@ -1763,6 +2041,9 @@ function OrderForm() {
             tour_date: data.tour_date,
             status: data.status,
             notes: data.notes || "",
+            customer_country: data.customer_country || "",
+            request_source: data.request_source || "",
+            request_source_other: data.request_source_other || "",
           });
           setCurrentOwner(data.owner || null);
         }
@@ -1829,6 +2110,9 @@ function OrderForm() {
         tour_date: form.tour_date,
         status: form.status,
         notes: form.notes || null,
+        customer_country: form.customer_country || null,
+        request_source: form.request_source || null,
+        request_source_other: form.request_source_other || null,
         updated_at: new Date().toISOString(),
       };
       const isUuid =
@@ -1855,6 +2139,9 @@ function OrderForm() {
         tour_date: form.tour_date,
         status: form.status,
         notes: form.notes || null,
+        customer_country: form.customer_country || null,
+        request_source: form.request_source || null,
+        request_source_other: form.request_source_other || null,
         owner_id: user.id,
       };
       result = await supabase.from("orders").insert(insertPayload);
@@ -2053,6 +2340,48 @@ function OrderForm() {
         <Card>
           <div className="card-title">
             <span className="section-icon">
+              <Compass size={17} />
+            </span>
+            <div>
+              <h2>Thông tin tiếp thị</h2>
+              <p>Nguồn gốc khách hàng và chiến dịch.</p>
+            </div>
+          </div>
+          <div className="form-grid two">
+            <CountrySelect
+              value={form.customer_country}
+              onChange={(v) => update("customer_country", v)}
+            />
+
+            <Select
+              label="Nguồn request"
+              value={form.request_source}
+              onChange={(v) => {
+                update("request_source", v);
+                if (v !== "OTHER") update("request_source_other", "");
+              }}
+            >
+              <option value="">-- Chọn nguồn --</option>
+              <option value="FACEBOOK">Facebook</option>
+              <option value="INSTAGRAM">Instagram</option>
+              <option value="EMAIL">Email</option>
+              <option value="WHATSAPP">WhatsApp</option>
+              <option value="RETURNING_CUSTOMER">Khách cũ</option>
+              <option value="OTHER">Khác</option>
+            </Select>
+          </div>
+          {form.request_source === "OTHER" && (
+            <Input
+              label="Nguồn cụ thể"
+              value={form.request_source_other}
+              onChange={(v) => update("request_source_other", v)}
+              required
+            />
+          )}
+        </Card>
+        <Card>
+          <div className="card-title">
+            <span className="section-icon">
               <FileText size={17} />
             </span>
             <div>
@@ -2080,6 +2409,111 @@ function OrderForm() {
         </div>
       </form>
     </>
+  );
+}
+
+function OrderDetailSourceBadge({
+  source,
+  other,
+}: {
+  source?: string | null;
+  other?: string | null;
+}) {
+  if (!source) {
+    return (
+      <span className="italic text-xs text-[var(--text-dim)] opacity-60">
+        Chưa cập nhật nguồn khách
+      </span>
+    );
+  }
+
+  const configs: Record<
+    string,
+    { bg: string; label: string; icon: React.ReactNode }
+  > = {
+    FACEBOOK: {
+      bg: "#1877F2",
+      label: "Facebook",
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+        </svg>
+      ),
+    },
+    INSTAGRAM: {
+      bg: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+      label: "Instagram",
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+          <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+        </svg>
+      ),
+    },
+    WHATSAPP: {
+      bg: "#25D366",
+      label: "WhatsApp",
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+        </svg>
+      ),
+    },
+    EMAIL: {
+      bg: "#EA4335",
+      label: "Email",
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+          <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 010 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
+        </svg>
+      ),
+    },
+    RETURNING_CUSTOMER: {
+      bg: "#8b5cf6",
+      label: "Khách cũ",
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+          <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+        </svg>
+      ),
+    },
+    OTHER: {
+      bg: "#64748b",
+      label: other ? `Khác: ${other}` : "Khác",
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="5" cy="12" r="2" />
+          <circle cx="19" cy="12" r="2" />
+        </svg>
+      ),
+    },
+  };
+
+  const cfg = configs[source] || {
+    bg: "#64748b",
+    label: source,
+    icon: <Share2 size={12} />,
+  };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        fontSize: "12px",
+        padding: "3px 8px",
+        borderRadius: "6px",
+        background: cfg.bg,
+        color: "#ffffff",
+        fontWeight: 600,
+        lineHeight: "16px",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+      }}
+    >
+      {cfg.icon}
+      <span>{cfg.label}</span>
+    </span>
   );
 }
 
@@ -2571,12 +3005,18 @@ function OrderDetail() {
             </div>
 
             <div className="bg-[var(--bg-body)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
+              {/* Phone */}
               <div className="flex items-center justify-between p-3.5 transition-colors hover:bg-[var(--bg-hover)]">
                 <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
-                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center flex-shrink-0">
                     <Phone size={14} />
                   </div>
-                  <span className="font-medium">{order.customer_phone}</span>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] font-semibold leading-tight">
+                      Số điện thoại
+                    </span>
+                    <span className="font-medium mt-0.5">{order.customer_phone}</span>
+                  </div>
                 </div>
                 <div className="flex gap-1">
                   <a
@@ -2601,19 +3041,31 @@ function OrderDetail() {
                 </div>
               </div>
 
-              {order.customer_email ? (
-                <div className="flex items-center justify-between p-3.5 border-t border-[var(--border-subtle)] border-dashed transition-colors hover:bg-[var(--bg-hover)]">
-                  <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
-                    <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center">
-                      <Mail size={14} />
-                    </div>
-                    <span
-                      className="font-medium truncate max-w-[150px]"
-                      title={order.customer_email}
-                    >
-                      {order.customer_email}
-                    </span>
+              {/* Email */}
+              <div className="flex items-center justify-between p-3.5 border-t border-[var(--border-subtle)] border-dashed transition-colors hover:bg-[var(--bg-hover)]">
+                <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 flex items-center justify-center flex-shrink-0">
+                    <Mail size={14} />
                   </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] font-semibold leading-tight">
+                      Email
+                    </span>
+                    {order.customer_email ? (
+                      <span
+                        className="font-medium truncate max-w-[170px] mt-0.5"
+                        title={order.customer_email}
+                      >
+                        {order.customer_email}
+                      </span>
+                    ) : (
+                      <span className="italic text-xs text-[var(--text-dim)] opacity-60 mt-0.5">
+                        Chưa cập nhật email
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {order.customer_email && (
                   <a
                     href={`mailto:${order.customer_email}`}
                     className="p-1.5 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 rounded-md transition-colors"
@@ -2621,12 +3073,59 @@ function OrderDetail() {
                   >
                     <Mail size={14} />
                   </a>
+                )}
+              </div>
+
+              {/* Quốc gia */}
+              <div className="flex items-center justify-between p-3.5 border-t border-[var(--border-subtle)] border-dashed transition-colors hover:bg-[var(--bg-hover)]">
+                <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
+                  <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                    <Globe size={14} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] font-semibold leading-tight">
+                      Quốc gia
+                    </span>
+                    {order.customer_country ? (() => {
+                      const countryObj = ALL_COUNTRIES.find(
+                        (c) => c.code === order.customer_country
+                      );
+                      return (
+                        <span className="font-medium flex items-center gap-1.5 mt-0.5">
+                          <span className="text-base leading-none">
+                            {countryObj?.flag || "🌐"}
+                          </span>
+                          <span>{countryObj?.name || order.customer_country}</span>
+                        </span>
+                      );
+                    })() : (
+                      <span className="italic text-xs text-[var(--text-dim)] opacity-60 mt-0.5">
+                        Chưa cập nhật quốc gia
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <div className="flex items-center p-3.5 border-t border-[var(--border-subtle)] border-dashed text-xs italic text-[var(--text-dim)] opacity-60">
-                  Chưa cập nhật email
+              </div>
+
+              {/* Nguồn khách */}
+              <div className="flex items-center justify-between p-3.5 border-t border-[var(--border-subtle)] border-dashed transition-colors hover:bg-[var(--bg-hover)]">
+                <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
+                  <div className="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center flex-shrink-0">
+                    <Share2 size={14} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] font-semibold leading-tight">
+                      Nguồn khách
+                    </span>
+                    <div className="mt-1">
+                      <OrderDetailSourceBadge
+                        source={order.request_source}
+                        other={order.request_source_other}
+                      />
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -2701,11 +3200,321 @@ function CustomBarTooltip({
   return null;
 }
 
+function CustomCountryBarTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: any[];
+}) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="saler-chart-tooltip">
+        <div className="tooltip-header" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <Globe size={15} style={{ color: "var(--text-dim)" }} />
+          <strong>{data.name}</strong>
+        </div>
+        <div className="tooltip-row">
+          <span>Số đơn tour:</span>
+          <b>{data.orders} đơn</b>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+const MARKETING_SOURCE_CONFIG: Record<
+  string,
+  { name: string; color: string; bg: string; icon: React.ReactNode }
+> = {
+  FACEBOOK: {
+    name: "Facebook",
+    color: "#1877F2",
+    bg: "#1877F2",
+    icon: (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+        <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+      </svg>
+    ),
+  },
+  INSTAGRAM: {
+    name: "Instagram",
+    color: "#E1306C",
+    bg: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+    icon: (
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="white">
+        <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+      </svg>
+    ),
+  },
+  WHATSAPP: {
+    name: "WhatsApp",
+    color: "#25D366",
+    bg: "#25D366",
+    icon: (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+      </svg>
+    ),
+  },
+  EMAIL: {
+    name: "Email",
+    color: "#EA4335",
+    bg: "#EA4335",
+    icon: (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+        <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 010 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
+      </svg>
+    ),
+  },
+  RETURNING_CUSTOMER: {
+    name: "Khách cũ",
+    color: "#8b5cf6",
+    bg: "#8b5cf6",
+    icon: (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
+      </svg>
+    ),
+  },
+  OTHER: {
+    name: "Khác",
+    color: "#64748b",
+    bg: "#64748b",
+    icon: (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+        <circle cx="12" cy="12" r="2" />
+        <circle cx="5" cy="12" r="2" />
+        <circle cx="19" cy="12" r="2" />
+      </svg>
+    ),
+  },
+  UNKNOWN: {
+    name: "Chưa rõ",
+    color: "#94a3b8",
+    bg: "#94a3b8",
+    icon: (
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    ),
+  },
+};
+
+function CustomSourcePieTooltip({
+  active,
+  payload,
+  total,
+}: {
+  active?: boolean;
+  payload?: any[];
+  total: number;
+}) {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const pct = total > 0 ? Math.round((data.count / total) * 100) : 0;
+    return (
+      <div
+        className="saler-chart-tooltip"
+        style={{
+          background: "var(--bg-card, #ffffff)",
+          border: "1px solid var(--border-subtle, #e2e8f0)",
+          boxShadow: "0 12px 28px rgba(0, 0, 0, 0.25)",
+          position: "relative",
+          zIndex: 100,
+          opacity: 1,
+        }}
+      >
+        <div className="tooltip-header" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "16px",
+              height: "16px",
+              borderRadius: "4px",
+              background: data.bg,
+              color: "white",
+              flexShrink: 0,
+            }}
+          >
+            {data.icon}
+          </span>
+          <strong>{data.name}</strong>
+        </div>
+        <div className="tooltip-row">
+          <span>Số đơn tour:</span>
+          <b>{data.count} đơn</b>
+        </div>
+        <div className="tooltip-row">
+          <span>Tỷ trọng:</span>
+          <span>{pct}%</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+function CustomSourceXAxisTick({ x, y, payload }: any) {
+  const name = payload?.value;
+  const conf =
+    Object.values(MARKETING_SOURCE_CONFIG).find((c) => c.name === name) ||
+    MARKETING_SOURCE_CONFIG[name] || {
+      name: name || "",
+      color: "#64748b",
+      bg: "#64748b",
+      icon: null,
+    };
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <foreignObject x={-40} y={4} width={80} height={46} style={{ overflow: "visible" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "3px",
+            textAlign: "center",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "18px",
+              height: "18px",
+              borderRadius: "5px",
+              background: conf.bg,
+              color: "white",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+              flexShrink: 0,
+            }}
+          >
+            {conf.icon}
+          </span>
+          <span
+            style={{
+              fontSize: "11px",
+              fontWeight: 500,
+              color: "var(--text-dim)",
+              whiteSpace: "nowrap",
+              lineHeight: 1,
+            }}
+          >
+            {conf.name}
+          </span>
+        </div>
+      </foreignObject>
+    </g>
+  );
+}
+
+function CustomSourceStatusTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: any[];
+  label?: string;
+}) {
+  if (active && payload && payload.length) {
+    const data = payload[0]?.payload;
+    const conf =
+      Object.values(MARKETING_SOURCE_CONFIG).find((c) => c.name === label) ||
+      (data?.code && MARKETING_SOURCE_CONFIG[data.code]) || {
+        name: label || "",
+        color: "#64748b",
+        bg: "#64748b",
+        icon: null,
+      };
+
+    const totalOrders =
+      (data?.new || 0) +
+      (data?.consulting || 0) +
+      (data?.closed || 0) +
+      (data?.cancelled || 0);
+
+    const statusItems = [
+      { label: "Mới", count: data?.new || 0, color: "var(--status-new-text)" },
+      { label: "Đang tư vấn", count: data?.consulting || 0, color: "var(--status-consulting-text)" },
+      { label: "Đã chốt", count: data?.closed || 0, color: "var(--status-closed-text)" },
+      { label: "Đã hủy", count: data?.cancelled || 0, color: "var(--status-cancelled-text)" },
+    ].filter((item) => item.count > 0);
+
+    return (
+      <div
+        className="saler-chart-tooltip"
+        style={{
+          background: "var(--bg-card, #ffffff)",
+          border: "1px solid var(--border-subtle, #e2e8f0)",
+          boxShadow: "0 12px 28px rgba(0, 0, 0, 0.25)",
+          minWidth: "155px",
+          position: "relative",
+          zIndex: 100,
+        }}
+      >
+        <div className="tooltip-header" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "18px",
+              height: "18px",
+              borderRadius: "4px",
+              background: conf.bg,
+              color: "white",
+              flexShrink: 0,
+            }}
+          >
+            {conf.icon}
+          </span>
+          <strong>{conf.name}</strong>
+          <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-dim)", fontWeight: 600 }}>
+            {totalOrders} đơn
+          </span>
+        </div>
+        {statusItems.map((st) => (
+          <div key={st.label} className="tooltip-row">
+            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                style={{
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  background: st.color,
+                }}
+              />
+              {st.label}:
+            </span>
+            <b>{st.count} đơn</b>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
 function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [salers, setSalers] = useState<Profile[]>([]);
   const [selectedSaler, setSelectedSaler] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<string>("7");
+  const [selectedCountry, setSelectedCountry] = useState<string>("all");
+  const [selectedSource, setSelectedSource] = useState<string>("all");
+  const [countryTimeRange, setCountryTimeRange] = useState<string>("all");
+  const [countryTopN, setCountryTopN] = useState<string>("5");
 
   function loadDashboardData() {
     supabase
@@ -2751,6 +3560,12 @@ function Dashboard() {
     if (selectedSaler !== "all") {
       list = list.filter((o) => o.owner_id === selectedSaler);
     }
+    if (selectedCountry !== "all") {
+      list = list.filter((o) => (o.customer_country || 'UNKNOWN') === selectedCountry);
+    }
+    if (selectedSource !== "all") {
+      list = list.filter((o) => (o.request_source || 'UNKNOWN') === selectedSource);
+    }
     if (timeRange !== "all") {
       const days = parseInt(timeRange, 10);
       const cutoff = new Date();
@@ -2762,7 +3577,7 @@ function Dashboard() {
       });
     }
     return list;
-  }, [orders, selectedSaler, timeRange]);
+  }, [orders, selectedSaler, timeRange, selectedCountry, selectedSource]);
 
   const salerTotal = filteredSalerOrders.length;
   const salerNew = filteredSalerOrders.filter((o) => o.status === "new").length;
@@ -2803,6 +3618,113 @@ function Dashboard() {
       percent: salerTotal ? Math.round((salerCancelled / salerTotal) * 100) : 0,
     },
   ];
+
+  const countryData = useMemo(() => {
+    let list = orders;
+    if (countryTimeRange !== "all") {
+      const days = parseInt(countryTimeRange, 10);
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      cutoff.setHours(0, 0, 0, 0);
+      list = list.filter((o) => {
+        const d = new Date(o.created_at || o.booking_date);
+        return d >= cutoff;
+      });
+    }
+
+    const countryMap: Record<
+      string,
+      { code: string; name: string; flag: string; orders: number }
+    > = {};
+
+    list.forEach((o) => {
+      const code = o.customer_country || "UNKNOWN";
+      if (!countryMap[code]) {
+        if (code === "UNKNOWN") {
+          countryMap[code] = {
+            code,
+            name: "Chưa rõ",
+            flag: "🌐",
+            orders: 0,
+          };
+        } else {
+          const c = ALL_COUNTRIES.find((x) => x.code === code);
+          countryMap[code] = {
+            code,
+            name: c ? c.name : code,
+            flag: c ? c.flag : "🌐",
+            orders: 0,
+          };
+        }
+      }
+      countryMap[code].orders += 1;
+    });
+
+    return Object.values(countryMap);
+  }, [orders, countryTimeRange]);
+
+  const countryChartData = useMemo(() => {
+    const sorted = [...countryData].sort((a, b) => b.orders - a.orders);
+
+    if (countryTopN === "all") return sorted;
+    const n = parseInt(countryTopN, 10);
+    return sorted.slice(0, n);
+  }, [countryData, countryTopN]);
+
+  const sourceData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    orders.forEach((o) => {
+      const src = o.request_source || "UNKNOWN";
+      counts[src] = (counts[src] || 0) + 1;
+    });
+
+    return Object.entries(counts)
+      .map(([code, count]) => {
+        const conf = MARKETING_SOURCE_CONFIG[code] || {
+          name: code,
+          color: "#64748b",
+          bg: "#64748b",
+          icon: (
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="white">
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg>
+          ),
+        };
+        return {
+          code,
+          name: conf.name,
+          color: conf.color,
+          bg: conf.bg,
+          icon: conf.icon,
+          count,
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+  }, [orders]);
+
+  const totalSourceOrders = useMemo(() => {
+    return sourceData.reduce((acc, curr) => acc + curr.count, 0);
+  }, [sourceData]);
+
+  const sourceStatusData = useMemo(() => {
+    const map: Record<string, any> = {};
+    const labelMap: Record<string, string> = {
+      'FACEBOOK': 'Facebook', 'INSTAGRAM': 'Instagram', 'EMAIL': 'Email',
+      'WHATSAPP': 'WhatsApp', 'RETURNING_CUSTOMER': 'Khách cũ', 'OTHER': 'Khác', 'UNKNOWN': 'Chưa rõ'
+    };
+    orders.forEach(o => {
+      const code = o.request_source || 'UNKNOWN';
+      const src = labelMap[code] || code;
+      if (!map[src]) map[src] = { code, name: src, new: 0, consulting: 0, closed: 0, cancelled: 0 };
+      map[src][o.status]++;
+    });
+    return Object.values(map).sort((a, b) => (b.new + b.consulting + b.closed + b.cancelled) - (a.new + a.consulting + a.closed + a.cancelled));
+  }, [orders]);
+
+  const COLORS = ['#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#fb7185', '#fcd34d', '#4ade80', '#94a3b8'];
+
 
   return (
     <>
@@ -2910,6 +3832,32 @@ function Dashboard() {
                 <option value="30">30 ngày qua</option>
                 <option value="all">Tất cả</option>
               </select>
+              <select
+                className="mini-select"
+                value={selectedCountry}
+                onChange={(e) => setSelectedCountry(e.target.value)}
+                title="Quốc gia"
+              >
+                <option value="all">Tất cả quốc gia</option>
+                {Array.from(new Set(orders.map(o => o.customer_country || 'UNKNOWN'))).map(c => (
+                  <option key={c} value={c}>{c === 'UNKNOWN' ? 'Chưa rõ' : ALL_COUNTRIES.find(x => x.code === c)?.name || c}</option>
+                ))}
+              </select>
+              <select
+                className="mini-select"
+                value={selectedSource}
+                onChange={(e) => setSelectedSource(e.target.value)}
+                title="Nguồn"
+              >
+                <option value="all">Tất cả nguồn</option>
+                <option value="FACEBOOK">Facebook</option>
+                <option value="INSTAGRAM">Instagram</option>
+                <option value="EMAIL">Email</option>
+                <option value="WHATSAPP">WhatsApp</option>
+                <option value="RETURNING_CUSTOMER">Khách cũ</option>
+                <option value="OTHER">Khác</option>
+                <option value="UNKNOWN">Chưa rõ</option>
+              </select>
             </div>
           </div>
 
@@ -2967,6 +3915,412 @@ function Dashboard() {
                 </BarChart>
               </ResponsiveContainer>
             )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Row 1: Số lượng khách theo quốc gia & Đơn theo Nguồn & Trạng thái ngang hàng */}
+      <div className="dashboard-grid two" style={{ marginTop: "24px" }}>
+        {/* Số lượng khách theo quốc gia (Horizontal Bar Chart) */}
+        <Card>
+          <div
+            className="card-heading-row"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h2>Đơn tour theo quốc gia</h2>
+              <p>
+                Thống kê số lượng đơn tour theo quốc gia người đặt trong khoảng thời gian đã chọn.
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+              <select
+                className="mini-select"
+                value={countryTopN}
+                onChange={(e) => setCountryTopN(e.target.value)}
+                title="Lấy Top N quốc gia"
+              >
+                <option value="5">Top 5</option>
+                <option value="10">Top 10</option>
+                <option value="15">Top 15</option>
+                <option value="all">Tất cả</option>
+              </select>
+
+              <select
+                className="mini-select"
+                value={countryTimeRange}
+                onChange={(e) => setCountryTimeRange(e.target.value)}
+                title="Khoảng thời gian"
+              >
+                <option value="7">7 ngày qua</option>
+                <option value="14">14 ngày qua</option>
+                <option value="30">30 ngày qua</option>
+                <option value="90">90 ngày qua</option>
+                <option value="all">Tất cả</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ height: "330px", marginTop: "16px" }}>
+            {countryChartData.length === 0 ? (
+              <div
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  color: "var(--text-dim)",
+                }}
+              >
+                <Globe size={32} opacity={0.4} />
+                <span style={{ fontSize: "13px" }}>
+                  Không có dữ liệu đơn theo quốc gia trong khoảng thời gian này
+                </span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={countryChartData}
+                  margin={{ top: 10, right: 35, left: 10, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    horizontal={false}
+                    vertical={true}
+                    stroke="var(--border)"
+                  />
+                  <XAxis
+                    type="number"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 12, fill: "var(--text-dim)" }}
+                    allowDecimals={false}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{
+                      fontSize: 12,
+                      fill: "var(--text-main)",
+                      fontWeight: 500,
+                    }}
+                    width={90}
+                  />
+                  <Tooltip
+                    content={<CustomCountryBarTooltip />}
+                    cursor={{ fill: "var(--bg-card-hover)", opacity: 0.4 }}
+                  />
+                  <Bar
+                    dataKey="orders"
+                    name="Số đơn tour"
+                    radius={[0, 6, 6, 0]}
+                    maxBarSize={22}
+                  >
+                    <LabelList
+                      dataKey="orders"
+                      position="right"
+                      style={{
+                        fill: "var(--text-main)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                      }}
+                    />
+                    {countryChartData.map((_entry, index) => (
+                      <Cell
+                        key={`cell-c-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </Card>
+
+        {/* Đơn theo Nguồn & Trạng thái */}
+        <Card>
+          <div className="card-heading-row">
+            <div>
+              <h2>Đơn theo Nguồn & Trạng thái</h2>
+              <p>Hiệu quả từng nguồn theo trạng thái đơn</p>
+            </div>
+          </div>
+          <div style={{ height: "330px", marginTop: "16px" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={sourceStatusData}
+                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="var(--border)"
+                />
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  interval={0}
+                  height={48}
+                  tick={<CustomSourceXAxisTick />}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: "var(--text-dim)" }}
+                />
+                <Tooltip
+                  cursor={{ fill: "var(--bg-card-hover)", opacity: 0.4 }}
+                  content={<CustomSourceStatusTooltip />}
+                />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: "12px", paddingTop: "6px" }} />
+                <Bar
+                  dataKey="new"
+                  name="Mới"
+                  stackId="a"
+                  fill="var(--status-new-text)"
+                  radius={[0, 0, 0, 0]}
+                />
+                <Bar
+                  dataKey="consulting"
+                  name="Đang tư vấn"
+                  stackId="a"
+                  fill="var(--status-consulting-text)"
+                  radius={[0, 0, 0, 0]}
+                />
+                <Bar
+                  dataKey="closed"
+                  name="Đã chốt"
+                  stackId="a"
+                  fill="var(--status-closed-text)"
+                  radius={[0, 0, 0, 0]}
+                />
+                <Bar
+                  dataKey="cancelled"
+                  name="Đã hủy"
+                  stackId="a"
+                  fill="var(--status-cancelled-text)"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      {/* Row 2: Nguồn tiếp thị đứng 1 mình ở dưới cùng */}
+      <div className="dashboard-grid single" style={{ marginTop: "24px" }}>
+        <Card>
+          <div className="card-heading-row">
+            <div>
+              <h2>Nguồn tiếp thị</h2>
+              <p>Tỷ trọng các nguồn mang lại đơn</p>
+            </div>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "minmax(260px, 1fr) minmax(320px, 1.5fr)",
+              gap: "24px",
+              alignItems: "center",
+              marginTop: "16px",
+            }}
+          >
+            <div style={{ height: "260px", position: "relative" }}>
+              <div
+                style={{
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  transform: "translate(-50%, -50%)",
+                  textAlign: "center",
+                  pointerEvents: "none",
+                  zIndex: 1,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "var(--text-dim)",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                  }}
+                >
+                  Tổng cộng
+                </span>
+                <div
+                  style={{
+                    fontSize: "22px",
+                    fontWeight: 700,
+                    color: "var(--text-main)",
+                  }}
+                >
+                  {totalSourceOrders}
+                </div>
+                <span
+                  style={{ fontSize: "11px", color: "var(--text-dim)" }}
+                >
+                  đơn tour
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height="100%" style={{ position: "relative", zIndex: 10 }}>
+                <PieChart>
+                  <Pie
+                    data={sourceData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={65}
+                    outerRadius={95}
+                    paddingAngle={3}
+                    dataKey="count"
+                  >
+                    {sourceData.map((entry) => (
+                      <Cell
+                        key={`cell-s-${entry.code}`}
+                        fill={entry.color}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    wrapperStyle={{ zIndex: 100 }}
+                    content={<CustomSourcePieTooltip total={totalSourceOrders} />}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: "12px",
+              }}
+            >
+              {sourceData.map((entry) => {
+                const pct =
+                  totalSourceOrders > 0
+                    ? Math.round((entry.count / totalSourceOrders) * 100)
+                    : 0;
+                return (
+                  <div
+                    key={entry.code}
+                    style={{
+                      padding: "12px 14px",
+                      background: "var(--bg-body)",
+                      borderRadius: "10px",
+                      border: "1px solid var(--border-subtle)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: "22px",
+                            height: "22px",
+                            borderRadius: "6px",
+                            background: entry.bg,
+                            color: "white",
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.15)",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {entry.icon}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "var(--text-main)",
+                          }}
+                        >
+                          {entry.name}
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 700,
+                          color: "var(--text-heading)",
+                        }}
+                      >
+                        {entry.count} đơn
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          flex: 1,
+                          height: "6px",
+                          background: "var(--border-subtle)",
+                          borderRadius: "3px",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${pct}%`,
+                            height: "100%",
+                            background: entry.color,
+                            borderRadius: "3px",
+                            transition: "width 0.3s ease",
+                          }}
+                        />
+                      </div>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "var(--text-dim)",
+                          fontWeight: 600,
+                          minWidth: "30px",
+                          textAlign: "right",
+                        }}
+                      >
+                        {pct}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </Card>
       </div>
@@ -3572,12 +4926,12 @@ function SalersPage() {
                               right: 0,
                               top:
                                 index >= filtered.length - 2 &&
-                                filtered.length > 2
+                                  filtered.length > 2
                                   ? "auto"
                                   : "110%",
                               bottom:
                                 index >= filtered.length - 2 &&
-                                filtered.length > 2
+                                  filtered.length > 2
                                   ? "110%"
                                   : "auto",
                               minWidth: 180,

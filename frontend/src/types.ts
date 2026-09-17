@@ -28,6 +28,9 @@ export interface Order {
   num_guests?: number | null;
   rating?: number | null;
   notes: string | null;
+  customer_country: string | null;
+  request_source: string | null;
+  request_source_other: string | null;
   created_at: string;
   updated_at: string;
   owner?: Pick<Profile, 'display_name' | 'username' | 'avatar_url'>;
