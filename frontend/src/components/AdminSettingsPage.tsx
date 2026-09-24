@@ -339,7 +339,7 @@ export function AdminSettingsPage() {
                 <h2>Danh sách Tour du lịch ({filteredTours.length})</h2>
                 <p>Quản lý các gói tour mở bán trong hệ thống</p>
               </div>
-              <div className="search-field" style={{ width: '260px' }}>
+              <div className="search-field settings-search-field">
                 <Search size={15} />
                 <input
                   value={tourSearch}
@@ -488,7 +488,7 @@ export function AdminSettingsPage() {
                 <h2>Danh mục dạng phòng ({filteredRoomTypes.length})</h2>
                 <p>Các kiểu loại phòng áp dụng cho các đơn đặt tour</p>
               </div>
-              <div className="search-field" style={{ width: '260px' }}>
+              <div className="search-field settings-search-field">
                 <Search size={15} />
                 <input
                   value={roomTypeSearch}
