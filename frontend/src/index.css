@@ -1200,6 +1200,9 @@ nav a.active svg {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  background: var(--bg-card);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 table {
@@ -1210,7 +1213,6 @@ table {
 .orders-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 880px;
 }
 
 th {
@@ -1218,17 +1220,17 @@ th {
   background: var(--th-bg);
   text-align: left;
   font-size: 9px;
-  letter-spacing: .08em;
+  letter-spacing: .03em;
   font-weight: 700;
-  padding: 11px 10px;
+  padding: 11px 6px;
   border-bottom: 1px solid var(--border-row);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 td {
-  padding: 11px 10px;
+  padding: 11px 6px;
   border-bottom: 1px solid var(--border-subtle);
   color: var(--td-color);
   font-size: 11px;
@@ -1236,6 +1238,16 @@ td {
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: middle;
+}
+
+.orders-table th:first-child,
+.orders-table td:first-child {
+  padding-left: 14px;
+}
+
+.orders-table th:last-child,
+.orders-table td:last-child {
+  padding-right: 14px;
 }
 
 tbody tr:hover {
@@ -1291,9 +1303,10 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 96px;
+  width: auto;
+  min-width: 60px;
   border-radius: 6px;
-  padding: 5px 6px;
+  padding: 4px 7px;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: .02em;
@@ -4645,6 +4658,13 @@ input[type=number] {
 .orders-table-desktop,
 .salers-table-desktop {
   display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-card);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  overflow: hidden;
 }
 
 .orders-cards-mobile,

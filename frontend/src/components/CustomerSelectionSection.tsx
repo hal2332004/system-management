@@ -190,13 +190,35 @@ export function CustomerSelectionSection({
     }
   }, [tourDate, customerHistory, excludeOrderId, isEditing]);
 
+  // Xác định khách hàng chỉ có duy nhất 1 đơn trong toàn hệ thống (chính là đơn đang sửa)
+  const totalOrdersCount = customerHistory?.visits
+    ? customerHistory.visits.reduce((acc, v) => acc + (v.orders?.length || 0), 0)
+    : (customerHistory?.total_orders ?? 0);
+
+  const isSingleOrderCustomer = Boolean(
+    isEditing &&
+    customerHistory &&
+    totalOrdersCount <= 1
+  );
+
+  // Khi khách chỉ có 1 đơn, tự động khóa cố định về đợt 1 (Lần đầu tiên)
+  useEffect(() => {
+    if (isSingleOrderCustomer && customerHistory?.visits) {
+      const v1 =
+        customerHistory.visits.find((v) => v.visit_number === 1) ||
+        customerHistory.visits[0];
+      setDecision("same_visit");
+      if (v1) setSelectedExistingVisitId(v1.id);
+    }
+  }, [isSingleOrderCustomer, customerHistory]);
+
   // Tính toán số thứ tự đợt quay lại dự kiến
   const maxVisitNumber = customerHistory?.visits
     ? Math.max(0, ...customerHistory.visits.map((v) => v.visit_number))
     : 1;
 
   let targetVisitNumber = 1;
-  if (mode === "new") {
+  if (mode === "new" || isSingleOrderCustomer) {
     targetVisitNumber = 1;
   } else if (decision === "same_visit") {
     const found = customerHistory?.visits.find(
@@ -758,7 +780,65 @@ export function CustomerSelectionSection({
           </div>
 
           {/* 4. OVERLAP WARNING BANNER & SELECTION (Requirements 9-16) */}
-          {overlapResult.hasOverlap ? (
+          {isSingleOrderCustomer ? (
+            <div
+              style={{
+                background: "var(--bg-body)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "10px",
+                padding: "12px 14px",
+                marginBottom: "14px",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              <div
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "8px",
+                  background: "rgba(59, 130, 246, 0.1)",
+                  color: "#2563eb",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <User size={16} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    color: "var(--text-heading)",
+                    marginBottom: "2px",
+                  }}
+                >
+                  Khách hàng mới (Lần đầu tiên)
+                </div>
+                <div style={{ fontSize: "11px", color: "var(--text-dim)" }}>
+                  Khách hàng hiện chỉ có <b>1 đơn tour duy nhất</b> trong hệ thống. Đơn tour này là đơn khởi tạo ban đầu, không thể đổi thành đợt quay lại.
+                </div>
+              </div>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  padding: "3px 9px",
+                  borderRadius: "6px",
+                  background: "rgba(37, 99, 235, 0.08)",
+                  color: "#2563eb",
+                  border: "1px solid rgba(37, 99, 235, 0.2)",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                Cố định: Lần đầu
+              </span>
+            </div>
+          ) : overlapResult.hasOverlap ? (
             <div
               style={{
                 background: "rgba(245, 158, 11, 0.08)",

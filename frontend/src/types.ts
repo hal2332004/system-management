@@ -78,6 +78,7 @@ export interface CustomerHistoryVisit {
 export interface CustomerHistoryData {
   customer: Customer;
   visits: CustomerHistoryVisit[];
+  total_orders?: number;
 }
 
 export interface Order {

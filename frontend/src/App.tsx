@@ -2143,7 +2143,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                 <tr>
                   <th
                     style={{
-                      width: admin ? '9%' : '11%',
+                      width: admin ? '9%' : '10%',
                       cursor: "pointer",
                       userSelect: "none",
                     }}
@@ -2176,13 +2176,14 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       )}
                     </div>
                   </th>
-                  <th style={{ width: admin ? '12%' : '14%' }}>KHÁCH HÀNG</th>
+                  <th style={{ width: admin ? '14%' : '16%' }}>KHÁCH HÀNG</th>
                   <th style={{ width: admin ? '6%' : '7%', textAlign: 'center' }}>QUỐC TỊCH</th>
-                  <th style={{ width: admin ? '10%' : '11%' }}>
+                  <th style={{ width: admin ? '9%' : '10%' }}>
                     SỐ ĐIỆN THOẠI
                   </th>
                   {admin && <th style={{ width: '11%' }}>NHÂN VIÊN SALE</th>}
-                  <th style={{ width: admin ? '19%' : '22%' }}>SẢN PHẨM ĐÃ GỬI</th>
+                  <th style={{ width: admin ? '17%' : '19%' }}>SẢN PHẨM ĐÃ GỬI</th>
+                  <th style={{ width: admin ? '5%' : '6%', textAlign: 'center' }}>SỐ LƯỢNG</th>
                   <th
                     style={{
                       width: admin ? '10%' : '11%',
@@ -2218,8 +2219,8 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       )}
                     </div>
                   </th>
-                  <th style={{ width: admin ? '10%' : '11%' }}>LOẠI TOUR</th>
-                  <th style={{ width: admin ? '10%' : '11%' }}>TRẠNG THÁI</th>
+                  <th style={{ width: admin ? '8%' : '9%' }}>LOẠI TOUR</th>
+                  <th style={{ width: admin ? '11%' : '12%' }}>TRẠNG THÁI</th>
                 </tr>
               </thead>
               <tbody>
@@ -2335,72 +2336,44 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       </td>
                     )}
                     <td style={{ overflow: 'hidden' }}>
-                      <b className="tour-cell" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{order.tour_name}</b>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "5px",
-                          flexWrap: "wrap",
-                          marginTop: "5px",
-                        }}
-                      >
-                        <RequestSourceBadge
-                          source={order.request_source}
-                          sourceOther={order.request_source_other}
-                        />
-                        {order.num_guests && (
-                          <span
-                            className="guest-badge"
-                            title={`Số lượng khách: ${order.num_guests} người`}
-                          >
-                            <Users size={10} /> {order.num_guests} khách
-                          </span>
-                        )}
-                        {order.rating && (
-                          <span
-                            className="rating-badge"
-                            title={`Hạng sao khách sạn: ${order.rating} sao`}
-                          >
-                            <Star size={10} className="star-filled" />{" "}
-                            {order.rating}★
-                          </span>
-                        )}
-                      </div>
-                      {order.room_type && (
+                      <b className="tour-cell" style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }} title={order.tour_name}>
+                        {order.tour_name}
+                      </b>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {order.num_guests ? (
                         <span
-                          className="room-type-badge"
-                          title={`Dạng phòng: ${order.room_type}`}
-                          style={{ marginTop: '3px', display: 'inline-block' }}
+                          className="customer-phone"
+                          title={`Số lượng: ${order.num_guests}`}
                         >
-                          {order.room_type}
+                          {order.num_guests}
                         </span>
+                      ) : (
+                        <span className="muted">—</span>
                       )}
                     </td>
                     <td>
                       {(() => {
                         const info = formatDepartureMonths(order.tour_date);
-                        return (
-                          <div className="departure-months-cell" title={info.fullText}>
-                            {info.count <= 1 ? (
-                              <span className="month-pill">{info.primary}</span>
-                            ) : (
-                              <>
-                                <span className="month-pill">{info.all[0]}</span>
-                                <span
-                                  className="month-pill-more"
-                                  title={info.all.slice(1).join(" · ")}
-                                >
-                                  +{info.count - 1}
-                                </span>
-                              </>
-                            )}
-                          </div>
+                        return info.count > 0 ? (
+                          <span
+                            className="customer-phone"
+                            title={info.fullText}
+                          >
+                            {info.all[0]}
+                          </span>
+                        ) : (
+                          <span className="muted">—</span>
                         );
                       })()}
                     </td>
                     <td>
-                      <TourTypeBadge type={order.tour_type} />
+                      <span
+                        className="customer-phone"
+                        title={order.tour_type === "privado" ? "Tour privado" : "Tour grupal"}
+                      >
+                        {order.tour_type === "privado" ? "Privado" : "Grupal"}
+                      </span>
                     </td>
                     <td>
                       <Badge status={order.status} />
@@ -2444,23 +2417,9 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
 
                 <div className="order-card-badges">
                   <TourTypeBadge type={order.tour_type} />
-                  <RequestSourceBadge
-                    source={order.request_source}
-                    sourceOther={order.request_source_other}
-                  />
                   {order.num_guests && (
                     <span className="guest-badge" title={`Số lượng: ${order.num_guests} khách`}>
                       <Users size={10} /> {order.num_guests} khách
-                    </span>
-                  )}
-                  {order.rating && (
-                    <span className="rating-badge" title={`Hạng sao: ${order.rating} sao`}>
-                      <Star size={10} className="star-filled" /> {order.rating}★
-                    </span>
-                  )}
-                  {order.room_type && (
-                    <span className="room-type-badge">
-                      {order.room_type}
                     </span>
                   )}
                   {countryDisplay && (
@@ -2891,7 +2850,24 @@ function OrderForm() {
           .eq("id", existingOrderCustomerId);
       }
 
+      // Xử lý đợt tương tác / return_visit_id khi sửa đơn
+      let resolvedReturnVisitId = initialVisit?.id || null;
+      if (customerState.targetVisitNumber === 1 || customerState.returnVisitDecision === "same_visit") {
+        resolvedReturnVisitId = customerState.existingVisitId || initialVisit?.id || null;
+      } else if (
+        customerState.returnVisitDecision === "new_visit" &&
+        customerState.selectedCustomer &&
+        customerState.targetVisitNumber > 1
+      ) {
+        const newVisit = await createCustomerReturnVisit(
+          customerState.selectedCustomer.id,
+          `Đơn tour: ${form.tour_name}`
+        );
+        resolvedReturnVisitId = newVisit.id;
+      }
+
       const updatePayload = {
+        return_visit_id: resolvedReturnVisitId,
         customer_name: form.customer_name,
         customer_phone: form.customer_phone,
         customer_email: form.customer_email || null,
