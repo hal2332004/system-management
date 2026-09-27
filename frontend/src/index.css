@@ -4655,8 +4655,7 @@ input[type=number] {
 /* ==========================================================================
    DESKTOP DEFAULT RULES FOR RESPONSIVE COMPONENT SWITCHING
    ========================================================================== */
-.orders-table-desktop,
-.salers-table-desktop {
+.orders-table-desktop {
   display: block;
   width: 100%;
   max-width: 100%;
@@ -4665,6 +4664,26 @@ input[type=number] {
   border-bottom-left-radius: 12px;
   border-bottom-right-radius: 12px;
   overflow: hidden;
+}
+
+.salers-table-desktop {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-card);
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+  overflow: visible;
+  min-height: 240px;
+}
+
+.salers-table-desktop .table-scroll {
+  overflow: visible;
+}
+
+.salers-table-desktop td:last-child {
+  overflow: visible;
 }
 
 .orders-cards-mobile,

@@ -6210,10 +6210,38 @@ function generateUsername(displayName: string): string {
   return `${normalized}.${suffix}`;
 }
 
+function generateRandomPassword(): string {
+  const letters = "abcdefghjkmnpqrstuvwxyz";
+  const uppers = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const numbers = "23456789";
+  const specials = "!@#$";
+  let pass = "";
+  pass += uppers[Math.floor(Math.random() * uppers.length)];
+  pass += letters[Math.floor(Math.random() * letters.length)];
+  pass += numbers[Math.floor(Math.random() * numbers.length)];
+  pass += specials[Math.floor(Math.random() * specials.length)];
+  const all = letters + uppers + numbers;
+  for (let i = 0; i < 5; i++) {
+    pass += all[Math.floor(Math.random() * all.length)];
+  }
+  return pass
+    .split("")
+    .sort(() => 0.5 - Math.random())
+    .join("");
+}
+
 function SalersPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(true);
+  const [createdAccountInfo, setCreatedAccountInfo] = useState<{
+    display_name: string;
+    username: string;
+    email: string;
+    password: string;
+  } | null>(null);
+  const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [form, setForm] = useState({
     display_name: "",
     username: "",
@@ -6293,6 +6321,20 @@ function SalersPage() {
     }));
   }
 
+  function openCreateModal() {
+    const autoPassword = generateRandomPassword();
+    setForm({
+      display_name: "",
+      username: "",
+      email: "",
+      password: autoPassword,
+    });
+    setUsernameEdited(false);
+    setShowPassword(true);
+    setFormError("");
+    setShowModal(true);
+  }
+
   function closeModal() {
     setShowModal(false);
     setForm({ display_name: "", username: "", email: "", password: "" });
@@ -6323,8 +6365,23 @@ function SalersPage() {
     setFormError("");
     setBusy(true);
 
-    if (!form.username.trim()) {
+    const finalPassword = form.password.trim();
+    const finalUsername = form.username.trim().toLowerCase();
+    const finalEmail = form.email.trim();
+    const finalDisplayName = form.display_name.trim();
+
+    if (!finalUsername) {
       setFormError("Username không được để trống.");
+      setBusy(false);
+      return;
+    }
+    if (!finalEmail) {
+      setFormError("Email không được để trống.");
+      setBusy(false);
+      return;
+    }
+    if (!finalPassword || finalPassword.length < 6) {
+      setFormError("Mật khẩu cần tối thiểu 6 ký tự.");
       setBusy(false);
       return;
     }
@@ -6333,7 +6390,7 @@ function SalersPage() {
     const { data: existing } = await supabaseAdmin
       .from("profiles")
       .select("id")
-      .ilike("username", form.username.trim())
+      .ilike("username", finalUsername)
       .maybeSingle();
     if (existing) {
       setFormError("Username này đã được sử dụng. Vui lòng chọn tên khác.");
@@ -6344,10 +6401,10 @@ function SalersPage() {
     // Tạo user trên Supabase Auth
     const { data: createData, error: createError } =
       await supabaseAdmin.auth.admin.createUser({
-        email: form.email,
-        password: form.password,
+        email: finalEmail,
+        password: finalPassword,
         email_confirm: true,
-        user_metadata: { full_name: form.display_name },
+        user_metadata: { full_name: finalDisplayName },
       });
     if (createError || !createData?.user) {
       setFormError(createError?.message || "Không thể tạo tài khoản.");
@@ -6358,12 +6415,20 @@ function SalersPage() {
     // Cập nhật username vào profiles (trigger đã tạo profile, nhưng username do trigger sinh ngẫu nhiên)
     await supabaseAdmin
       .from("profiles")
-      .update({ username: form.username.trim().toLowerCase() })
+      .update({ username: finalUsername })
       .eq("id", createData.user.id);
 
     setBusy(false);
     closeModal();
     load();
+
+    // Hiển thị modal thông báo tạo tài khoản thành công kèm thông tin username và password để copy
+    setCreatedAccountInfo({
+      display_name: finalDisplayName || finalUsername,
+      username: finalUsername,
+      email: finalEmail,
+      password: finalPassword,
+    });
   }
 
   async function updateSaler(e: FormEvent) {
@@ -6511,7 +6576,7 @@ function SalersPage() {
       <PageHeader
         title="Nhân viên Sale"
         actions={
-          <Button onClick={() => setShowModal(true)}>
+          <Button onClick={openCreateModal}>
             <Plus size={16} /> Tạo nhân viên mới
           </Button>
         }
@@ -6560,15 +6625,88 @@ function SalersPage() {
                 icon={<Mail size={15} />}
                 required
               />
-              <Input
-                label="Mật khẩu tạm thời"
-                value={form.password}
-                onChange={(v) => setForm((p) => ({ ...p, password: v }))}
-                placeholder="Tối thiểu 6 ký tự"
-                type="password"
-                icon={<KeyRound size={15} />}
-                required
-              />
+              <div className="field">
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 6,
+                  }}
+                >
+                  <span>
+                    Mật khẩu đăng nhập <em> *</em>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newPass = generateRandomPassword();
+                      setForm((p) => ({ ...p, password: newPass }));
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "var(--accent-primary)",
+                      fontSize: 12,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: 0,
+                      fontWeight: 500,
+                    }}
+                    title="Tạo lại mật khẩu ngẫu nhiên khác"
+                  >
+                    <RotateCcw size={12} /> Đổi mật khẩu khác
+                  </button>
+                </div>
+                <div
+                  className="input-wrap"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    position: "relative",
+                  }}
+                >
+                  <span className="input-icon">
+                    <KeyRound size={15} />
+                  </span>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={form.password}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, password: e.target.value }))
+                    }
+                    placeholder="Mật khẩu ngẫu nhiên"
+                    required
+                    style={{
+                      paddingRight: 40,
+                      fontFamily: showPassword
+                        ? "'JetBrains Mono', monospace"
+                        : undefined,
+                      letterSpacing: showPassword ? "0.04em" : undefined,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      position: "absolute",
+                      right: 10,
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "var(--text-muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      padding: 4,
+                    }}
+                    title={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  >
+                    <Eye size={15} />
+                  </button>
+                </div>
+              </div>
               {formError && <div className="form-error">{formError}</div>}
               <div className="form-actions">
                 <Button variant="secondary" type="button" onClick={closeModal}>
@@ -6669,6 +6807,186 @@ function SalersPage() {
         </div>
       )}
 
+      {/* Modal Thông báo Tạo tài khoản thành công & Copy thông tin */}
+      {createdAccountInfo && (
+        <div
+          className="modal-overlay"
+          onClick={() => setCreatedAccountInfo(null)}
+        >
+          <div
+            className="modal"
+            style={{ maxWidth: 440, padding: "26px 24px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: "50%",
+                  background: "rgba(34, 197, 94, 0.15)",
+                  color: "var(--accent-success)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Check size={28} strokeWidth={2.5} />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 18, margin: "0 0 6px" }}>
+                  Tạo tài khoản thành công!
+                </h2>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    color: "var(--text-muted)",
+                    lineHeight: 1.4,
+                  }}
+                >
+                  Nhân viên <b>{createdAccountInfo.display_name}</b> đã được kích
+                  hoạt và sẵn sàng đăng nhập.
+                </p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 20,
+                background: "var(--bg-app)",
+                border: "1px solid var(--border-row)",
+                borderRadius: 12,
+                padding: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  Username:
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--accent-primary)",
+                  }}
+                >
+                  {createdAccountInfo.username}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                  Password:
+                </span>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--text-heading)",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {createdAccountInfo.password}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  borderTop: "1px dashed var(--border-row)",
+                  paddingTop: 8,
+                }}
+              >
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  Email:
+                </span>
+                <span style={{ fontSize: 12, color: "var(--text-main)" }}>
+                  {createdAccountInfo.email}
+                </span>
+              </div>
+            </div>
+
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--text-muted)",
+                marginTop: 14,
+                marginBottom: 16,
+                textAlign: "center",
+              }}
+            >
+              Sao chép thông tin tài khoản dưới đây để gửi trực tiếp cho nhân viên.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+              }}
+            >
+              <Button
+                variant="primary"
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  gap: 8,
+                  padding: "10px 16px",
+                }}
+                onClick={() => {
+                  const textToCopy = `Username: ${createdAccountInfo.username}\npassword: ${createdAccountInfo.password}`;
+                  navigator.clipboard.writeText(textToCopy);
+                  setCopiedSuccess(true);
+                  setTimeout(() => setCopiedSuccess(false), 2500);
+                }}
+              >
+                {copiedSuccess ? (
+                  <>
+                    <CheckCheck size={16} /> Đã sao chép!
+                  </>
+                ) : (
+                  <>
+                    <Copy size={16} /> Sao chép thông tin
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="secondary"
+                style={{ padding: "10px 18px" }}
+                onClick={() => setCreatedAccountInfo(null)}
+              >
+                Đóng
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Card>
         <div className="toolbar">
           <div className="search-field">
@@ -6707,13 +7025,7 @@ function SalersPage() {
                 </tr>
               ) : (
                 filtered.map((profile, index) => (
-                  <tr
-                    key={profile.id}
-                    style={{
-                      position: "relative",
-                      zIndex: openMenu === profile.id ? 40 : 1,
-                    }}
-                  >
+                  <tr key={profile.id}>
                     <td>
                       <div className="owner-cell">
                         <Avatar
@@ -6724,7 +7036,7 @@ function SalersPage() {
                         <b>{profile.display_name}</b>
                       </div>
                     </td>
-                    <td className="mono">@{profile.username}</td>
+                    <td className="mono">{profile.username}</td>
                     <td className="muted">{profile.email}</td>
                     <td>
                       <span className="role-pill">
@@ -6745,7 +7057,8 @@ function SalersPage() {
                     <td
                       style={{
                         position: "relative",
-                        zIndex: openMenu === profile.id ? 50 : 1,
+                        zIndex: openMenu === profile.id ? 100 : 1,
+                        overflow: "visible",
                       }}
                     >
                       <div
@@ -6753,7 +7066,7 @@ function SalersPage() {
                           display: "flex",
                           justifyContent: "flex-end",
                           position: "relative",
-                          zIndex: openMenu === profile.id ? 60 : 1,
+                          zIndex: openMenu === profile.id ? 101 : 1,
                         }}
                       >
                         <div className="row-actions">
@@ -6775,14 +7088,14 @@ function SalersPage() {
                             style={{
                               right: 0,
                               top:
-                                index >= filtered.length - 2 &&
-                                  filtered.length > 2
+                                index === filtered.length - 1 &&
+                                filtered.length > 2
                                   ? "auto"
-                                  : "110%",
+                                  : "calc(100% + 4px)",
                               bottom:
-                                index >= filtered.length - 2 &&
-                                  filtered.length > 2
-                                  ? "110%"
+                                index === filtered.length - 1 &&
+                                filtered.length > 2
+                                  ? "calc(100% + 4px)"
                                   : "auto",
                               minWidth: 180,
                               zIndex: 1000,
@@ -6791,14 +7104,20 @@ function SalersPage() {
                             <b>Thao tác</b>
                             <button
                               type="button"
-                              onClick={() => openEdit(profile)}
+                              onClick={() => {
+                                setOpenMenu(null);
+                                openEdit(profile);
+                              }}
                             >
                               <Pencil size={13} /> Chỉnh sửa thông tin
                             </button>
                             {profile.role !== "admin" && (
                               <button
                                 type="button"
-                                onClick={() => toggleActive(profile)}
+                                onClick={() => {
+                                  setOpenMenu(null);
+                                  toggleActive(profile);
+                                }}
                               >
                                 {profile.is_active ? (
                                   <>
@@ -6838,7 +7157,7 @@ function SalersPage() {
                   <Avatar src={p.avatar_url} name={p.display_name} size="md" />
                   <div>
                     <div className="saler-card-name">{p.display_name}</div>
-                    <div className="saler-card-username mono">@{p.username}</div>
+                    <div className="saler-card-username mono">{p.username}</div>
                   </div>
                 </div>
                 <span className={`active-pill ${p.is_active ? "on" : "off"}`}>
