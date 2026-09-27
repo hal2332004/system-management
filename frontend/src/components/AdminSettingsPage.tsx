@@ -9,8 +9,7 @@ import {
   Check, 
   X, 
   AlertCircle, 
-  Power,
-  RotateCcw
+  Power
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Tour, RoomType } from '../types';
@@ -139,15 +138,15 @@ export function AdminSettingsPage() {
       setTours(prev => prev.map(t => t.id === tourId ? { ...t, name: trimmed } : t));
       setEditingTourId(null);
       setEditingTourName('');
-      setFeedback({ type: 'success', text: `Đã cập nhật tên tour thành "${trimmed}".` });
+      setFeedback({ type: 'success', text: `Đã cập nhật tên sản phẩm thành "${trimmed}".` });
     } catch (err: any) {
       console.error('Error updating tour:', err);
-      setFeedback({ type: 'error', text: 'Không thể đổi tên tour: ' + (err.message || '') });
+      setFeedback({ type: 'error', text: 'Không thể đổi tên sản phẩm: ' + (err.message || '') });
     }
   }
 
   async function handleDeleteTour(tour: Tour) {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa tour "${tour.name}"?\n(Lưu ý: Nếu tour đã được sử dụng trong các đơn hiện tại, tên tour trên đơn cũ vẫn được giữ nguyên.)`)) {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa sản phẩm "${tour.name}"?\n(Lưu ý: Nếu sản phẩm đã được sử dụng trong các đơn hiện tại, tên sản phẩm trên đơn cũ vẫn được giữ nguyên.)`)) {
       return;
     }
 
@@ -156,7 +155,7 @@ export function AdminSettingsPage() {
       if (error) throw error;
 
       setTours(prev => prev.filter(t => t.id !== tour.id));
-      setFeedback({ type: 'success', text: `Đã xóa tour "${tour.name}".` });
+      setFeedback({ type: 'success', text: `Đã xóa sản phẩm "${tour.name}".` });
     } catch (err: any) {
       console.error('Error deleting tour:', err);
       setFeedback({ type: 'error', text: 'Không thể xóa tour: ' + (err.message || '') });
@@ -289,7 +288,7 @@ export function AdminSettingsPage() {
           onClick={() => setActiveTab('tours')}
         >
           <Compass size={17} />
-          <span>Tour du lịch</span>
+          <span>Sản phẩm đã gửi (Tour)</span>
           <b className="tab-pill-count">{activeToursCount}/{tours.length}</b>
         </button>
 
@@ -312,8 +311,8 @@ export function AdminSettingsPage() {
             <div className="card-title">
               <span className="section-icon"><Compass size={17} /></span>
               <div>
-                <h2>Thêm tour mới</h2>
-                <p>Tour mới sẽ lập tức xuất hiện trong danh sách lựa chọn khi tạo đơn.</p>
+                <h2>Thêm sản phẩm mới</h2>
+                <p>Sản phẩm mới sẽ lập tức xuất hiện trong danh sách lựa chọn khi tạo đơn.</p>
               </div>
             </div>
 
@@ -322,12 +321,12 @@ export function AdminSettingsPage() {
                 <input
                   value={newTourName}
                   onChange={e => setNewTourName(e.target.value)}
-                  placeholder="Nhập tên tour..."
+                  placeholder="Nhập tên sản phẩm đã gửi..."
                   required
                 />
               </div>
               <button type="submit" className="button button-primary" disabled={saving || !newTourName.trim()}>
-                <Plus size={16} /> Thêm tour
+                <Plus size={16} /> Thêm sản phẩm
               </button>
             </form>
           </section>
@@ -336,32 +335,32 @@ export function AdminSettingsPage() {
           <section className="card settings-list-card">
             <div className="settings-list-header">
               <div>
-                <h2>Danh sách Tour du lịch ({filteredTours.length})</h2>
-                <p>Quản lý các gói tour mở bán trong hệ thống</p>
+                <h2>Danh sách Sản phẩm đã gửi ({filteredTours.length})</h2>
+                <p>Quản lý các sản phẩm / gói tour mở bán trong hệ thống</p>
               </div>
               <div className="search-field settings-search-field">
                 <Search size={15} />
                 <input
                   value={tourSearch}
                   onChange={e => setTourSearch(e.target.value)}
-                  placeholder="Tìm kiếm tour..."
+                  placeholder="Tìm kiếm sản phẩm..."
                 />
               </div>
             </div>
 
             {loading ? (
-              <div className="loading-state">Đang tải danh sách tour...</div>
+              <div className="loading-state">Đang tải danh sách sản phẩm...</div>
             ) : filteredTours.length === 0 ? (
               <div className="empty-state" style={{ padding: '40px 20px' }}>
                 <Compass size={28} />
-                <p>Không tìm thấy tour nào.</p>
+                <p>Không tìm thấy sản phẩm nào.</p>
               </div>
             ) : (
               <div className="settings-table-wrap">
                 <table className="settings-table">
                   <thead>
                     <tr>
-                      <th style={{ width: '50%' }}>TÊN TOUR</th>
+                      <th style={{ width: '50%' }}>TÊN SẢN PHẨM (TOUR)</th>
                       <th style={{ width: '20%' }}>TRẠNG THÁI</th>
                       <th style={{ width: '15%' }}>NGÀY TẠO</th>
                       <th style={{ width: '15%', textAlign: 'right' }}>THAO TÁC</th>

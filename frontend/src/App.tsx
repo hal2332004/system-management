@@ -49,15 +49,12 @@ import {
   ArrowDown,
   ArrowUpDown,
   BarChart3,
-  Bell,
   CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
-  ExternalLink,
-  Eye,
   FileText,
   KeyRound,
   LayoutDashboard,
@@ -85,16 +82,21 @@ import {
   BedDouble,
   Copy,
   CheckCheck,
-  Clock,
   PhoneCall,
   ArrowRight,
   Download,
-  Facebook,
-  Instagram,
-  MessageCircle,
-  HelpCircle,
   Globe,
-  Share2
+  Share2,
+  Calendar,
+  Plane,
+  Sparkles,
+  UserRound,
+  FileUp,
+  Eye,
+  MapPin,
+  RotateCcw,
+  History,
+  AlertTriangle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase, supabaseAdmin } from "@/lib/supabase";
@@ -106,19 +108,52 @@ import type {
   Role,
   Tour,
   RoomType,
+  TourType,
+  Customer,
+  CustomerReturnVisit,
+  CustomerHistoryData,
 } from "@/types";
 import { NotificationBell } from "./components/NotificationBell";
 import { Avatar } from "./components/Avatar";
 import { ProfilePage } from "./components/ProfilePage";
 import { AdminSettingsPage } from "./components/AdminSettingsPage";
 import { StarRating } from "./components/StarRating";
-import { POPULAR_COUNTRIES, ALL_COUNTRIES } from "@/lib/countries";
+import { DestinationMultiSelect } from "./components/DestinationMultiSelect";
+import { CountryFlag } from "./components/CountryFlag";
+import { ALL_COUNTRIES } from "@/lib/countries";
+import {
+  MonthMultiSelector,
+  parseTourMonths,
+  formatDepartureMonths,
+  SPANISH_MONTHS,
+  formatSpanishMonthKey,
+} from "./components/MonthMultiSelector";
+import {
+  CustomerSelectionSection,
+  type CustomerSelectionState,
+} from "./components/CustomerSelectionSection";
+import { CustomerHistoryModal } from "./components/CustomerHistoryModal";
+import {
+  createNewCustomerWithFirstVisit,
+  createCustomerReturnVisit,
+  getCustomerHistory,
+} from "./services/customerService";
+
 
 const statusMeta: Record<OrderStatus, { label: string; varPrefix: string }> = {
   new: { label: "Mới", varPrefix: "new" },
   consulting: { label: "Đang tư vấn", varPrefix: "consulting" },
   closed: { label: "Đã chốt", varPrefix: "closed" },
   cancelled: { label: "Đã hủy", varPrefix: "cancelled" },
+};
+
+const monthMeta: Record<string, { label: string }> = {
+  all: { label: "Tất cả các tháng" },
+  this_month: { label: "Tháng này" },
+  next_month: { label: "Tháng tới" },
+  next_3_months: { label: "3 tháng tới" },
+  this_year: { label: "Năm nay" },
+  next_year: { label: "Năm sau" },
 };
 
 function Logo({ compact = false }: { compact?: boolean }) {
@@ -182,6 +217,30 @@ function Badge({ status }: { status: OrderStatus }) {
       {item.label}
     </span>
   );
+}
+
+function TourTypeBadge({ type }: { type?: TourType | string | null }) {
+  const isPrivado = type === "privado";
+  return (
+    <span
+      className={`tour-type-badge ${isPrivado ? "privado" : "grupal"}`}
+      title={isPrivado ? "Tour privado" : "Tour grupal"}
+    >
+      {isPrivado ? (
+        <UserRound size={12} strokeWidth={2.2} />
+      ) : (
+        <Users size={12} strokeWidth={2.2} />
+      )}
+      <span>{isPrivado ? "Privado" : "Grupal"}</span>
+    </span>
+  );
+}
+
+function getFileNameFromPath(path?: string | null): string {
+  if (!path) return "";
+  const parts = path.split("/");
+  const fileName = parts[parts.length - 1];
+  return fileName.replace(/^\d+-/, "");
 }
 
 function RequestSourceBadge({
@@ -377,17 +436,23 @@ function Select({
   value,
   onChange,
   children,
+  required,
 }: {
   label?: string;
   value: string;
   onChange: (value: string) => void;
   children: ReactNode;
+  required?: boolean;
 }) {
   return (
     <label className="field">
-      {label && <span>{label}</span>}
+      {label && (
+        <span>
+          {label} {required && <span style={{ color: "var(--error-text, #ef4444)" }}>*</span>}
+        </span>
+      )}
       <div className="select-wrap">
-        <select value={value} onChange={(e) => onChange(e.target.value)}>
+        <select value={value} onChange={(e) => onChange(e.target.value)} required={required}>
           {children}
         </select>
         <ChevronDown size={15} />
@@ -914,21 +979,88 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
   const [status, setStatus] = useState("all");
   const [dateRange, setDateRange] = useState("all");
   const [dateType, setDateType] = useState<"booking_date" | "tour_date">(
-    "tour_date",
+    "booking_date",
   );
   const [specificDate, setSpecificDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [showDateFilters, setShowDateFilters] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [salers, setSalers] = useState<Profile[]>([]);
   const [showSalerDropdown, setShowSalerDropdown] = useState(false);
   const [salerSearchQuery, setSalerSearchQuery] = useState("");
-  const [currentUserId, setCurrentUserId] = useState<string>("");
   const [page, setPage] = useState(1);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [showSearchBar, setShowSearchBar] = useState(false);
   const PAGE_SIZE = 10;
+
+  const [customerFilter, setCustomerFilter] = useState<"all" | "new" | "returning">("all");
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [customerHistoryData, setCustomerHistoryData] = useState<CustomerHistoryData | null>(null);
+  const [loadingCustomerHistory, setLoadingCustomerHistory] = useState(false);
+
+  async function openCustomerHistory(customerId: string) {
+    setHistoryModalOpen(true);
+    setLoadingCustomerHistory(true);
+    try {
+      const data = await getCustomerHistory(customerId);
+      setCustomerHistoryData(data);
+    } catch (err) {
+      console.error("Lỗi khi tải lịch sử khách hàng:", err);
+    } finally {
+      setLoadingCustomerHistory(false);
+    }
+  }
+
+  const [selectedFilterMonths, setSelectedFilterMonths] = useState<string[]>([]);
+  const [filterPickerYear, setFilterPickerYear] = useState<number>(new Date().getFullYear());
+
+  useEffect(() => {
+    const depMonth = searchParams.get("departureMonth") || searchParams.get("month");
+    if (depMonth) {
+      setDateType("tour_date");
+      const parsed = parseTourMonths(depMonth);
+      setSelectedFilterMonths(parsed);
+      setSpecificDate(depMonth);
+      setDateRange("all");
+      setShowDateFilters(true);
+    }
+  }, [searchParams]);
+
+  const toggleFilterMonth = (monthNum: number, year: number) => {
+    const key = `${String(monthNum).padStart(2, "0")}/${year}`;
+    setSelectedFilterMonths((prev) => {
+      let updated: string[];
+      if (prev.includes(key)) {
+        updated = prev.filter((m) => m !== key);
+      } else {
+        updated = [...prev, key];
+      }
+      updated.sort((a, b) => {
+        const [ma, ya] = a.split("/").map(Number);
+        const [mb, yb] = b.split("/").map(Number);
+        if (ya !== yb) return (ya || 0) - (yb || 0);
+        return (ma || 0) - (mb || 0);
+      });
+      return updated;
+    });
+    setDateRange("all");
+  };
+
+  const removeFilterMonth = (key: string) => {
+    setSelectedFilterMonths((prev) => prev.filter((m) => m !== key));
+  };
+
+  const clearFilterMonths = () => {
+    setSelectedFilterMonths([]);
+    setSpecificDate("");
+    if (searchParams.has("departureMonth") || searchParams.has("month")) {
+      searchParams.delete("departureMonth");
+      searchParams.delete("month");
+      setSearchParams(searchParams);
+    }
+  };
 
   const activeSearchCount = [
     Boolean(queryName),
@@ -942,12 +1074,20 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
     setLoading(true);
     let request = supabase
       .from("orders")
-      .select("*, owner:profiles(display_name, username, avatar_url)")
+      .select("*, owner:profiles(display_name, username, avatar_url), customer:customers(id, customer_code, full_name, phone, email, country), return_visit:customer_return_visits(id, visit_number)")
       .order("created_at", { ascending: false });
     const { data: user } = await supabase.auth.getUser();
     if (user?.user) {
-      setCurrentUserId(user.user.id);
-      if (!admin) request = request.eq("owner_id", user.user.id);
+      if (!admin) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.user.id)
+          .maybeSingle();
+        if (prof?.role !== "admin") {
+          request = request.eq("owner_id", user.user.id);
+        }
+      }
     }
     const { data } = await request;
     setOrders((data || []) as Order[]);
@@ -992,6 +1132,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
     dateRange,
     dateType,
     specificDate,
+    selectedFilterMonths,
     orders,
     sortOrder,
   ]);
@@ -1001,6 +1142,18 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
       const matchName =
         !queryName ||
         (order.customer_name || "")
+          .toLowerCase()
+          .includes(queryName.toLowerCase()) ||
+        (order.customer?.customer_code || "")
+          .toLowerCase()
+          .includes(queryName.toLowerCase()) ||
+        (order.order_code || "")
+          .toLowerCase()
+          .includes(queryName.toLowerCase()) ||
+        (order.customer_phone || "")
+          .toLowerCase()
+          .includes(queryName.toLowerCase()) ||
+        (order.customer_email || "")
           .toLowerCase()
           .includes(queryName.toLowerCase());
       const matchPhone =
@@ -1012,28 +1165,76 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
           .includes(queryEmail.toLowerCase());
       const matchTour =
         !queryTour ||
-        (order.tour_name || "").toLowerCase().includes(queryTour.toLowerCase());
+        (order.tour_name || "").toLowerCase().includes(queryTour.toLowerCase()) ||
+        (order.private_tour_name || "").toLowerCase().includes(queryTour.toLowerCase());
       const matchSaler =
         !admin ||
         !querySaler ||
         order.owner_id === querySaler;
 
+      let matchCustomerType = true;
+      if (customerFilter === "new") {
+        matchCustomerType = !order.return_visit || order.return_visit.visit_number === 1;
+      } else if (customerFilter === "returning") {
+        matchCustomerType = Boolean(order.return_visit && order.return_visit.visit_number > 1);
+      }
+
       let matchDate = true;
-      if (dateRange !== "all") {
-        const targetDate = new Date(
-          dateType === "booking_date" ? order.booking_date : order.tour_date,
-        );
+      if (dateType === "tour_date") {
+        const orderMonths = parseTourMonths(order.tour_date);
         const now = new Date();
-        const today = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          now.getDate(),
-        );
-        if (dateRange === "today") {
-          matchDate =
-            targetDate >= today &&
-            targetDate <=
-            new Date(
+        const curY = now.getFullYear();
+        const curM = now.getMonth() + 1;
+        const curMonthKey = `${String(curM).padStart(2, "0")}/${curY}`;
+
+        if (selectedFilterMonths.length > 0) {
+          // MULTI-MONTH OR FILTER: Khách có bất kỳ tháng nào nằm trong các tháng đã chọn (Lọc tức thì)
+          matchDate = orderMonths.some((m) => selectedFilterMonths.includes(m));
+        } else if (dateRange !== "all") {
+          if (dateRange === "this_month") {
+            matchDate = orderMonths.includes(curMonthKey);
+          } else if (dateRange === "next_month") {
+            const nextM = curM === 12 ? 1 : curM + 1;
+            const nextY = curM === 12 ? curY + 1 : curY;
+            const nextMonthKey = `${String(nextM).padStart(2, "0")}/${nextY}`;
+            matchDate = orderMonths.includes(nextMonthKey);
+          } else if (dateRange === "next_3_months") {
+            const next3: string[] = [];
+            for (let i = 0; i < 3; i++) {
+              const d = new Date(curY, now.getMonth() + i, 1);
+              next3.push(
+                `${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`,
+              );
+            }
+            matchDate = orderMonths.some((m) => next3.includes(m));
+          } else if (dateRange === "this_year") {
+            matchDate = orderMonths.some((m) => m.endsWith(`/${curY}`));
+          } else if (dateRange === "next_year") {
+            matchDate = orderMonths.some((m) => m.endsWith(`/${curY + 1}`));
+          } else if (specificDate) {
+            let targetMonth = specificDate;
+            if (/^\d{4}-\d{1,2}/.test(specificDate)) {
+              const [y, m] = specificDate.split("-");
+              targetMonth = `${m.padStart(2, "0")}/${y}`;
+            } else if (/^\d{1,2}\/\d{4}$/.test(specificDate)) {
+              const [m, y] = specificDate.split("/");
+              targetMonth = `${m.padStart(2, "0")}/${y}`;
+            }
+            matchDate = orderMonths.includes(targetMonth);
+          }
+        }
+      } else {
+        // dateType === "booking_date"
+        if (dateRange !== "all") {
+          const targetDate = new Date(order.booking_date);
+          const now = new Date();
+          const today = new Date(
+            now.getFullYear(),
+            now.getMonth(),
+            now.getDate(),
+          );
+          if (dateRange === "today") {
+            const endOfToday = new Date(
               today.getFullYear(),
               today.getMonth(),
               today.getDate(),
@@ -1042,66 +1243,68 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
               59,
               999,
             );
-        } else if (dateRange === "yesterday") {
-          const yest = new Date(today);
-          yest.setDate(today.getDate() - 1);
-          matchDate = targetDate >= yest && targetDate < today;
-        } else if (dateRange === "7days") {
-          const d7 = new Date(today);
-          d7.setDate(today.getDate() - 7);
-          const endOfToday = new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            today.getDate(),
-            23,
-            59,
-            59,
-            999,
-          );
-          matchDate = targetDate >= d7 && targetDate <= endOfToday;
-        } else if (dateRange === "30days") {
-          const d30 = new Date(today);
-          d30.setDate(today.getDate() - 30);
-          const endOfToday = new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            today.getDate(),
-            23,
-            59,
-            59,
-            999,
-          );
-          matchDate = targetDate >= d30 && targetDate <= endOfToday;
-        } else if (dateRange === "this_month") {
-          const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-          const lastDay = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            0,
-            23,
-            59,
-            59,
-            999,
-          );
-          matchDate = targetDate >= firstDay && targetDate <= lastDay;
-        } else if (dateRange === "last_month") {
-          const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const lastDay = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            0,
-            23,
-            59,
-            59,
-            999,
-          );
-          matchDate = targetDate >= firstDay && targetDate <= lastDay;
-        } else if (dateRange === "specific_day" && specificDate) {
-          const selected = new Date(specificDate);
-          matchDate =
-            targetDate.getFullYear() === selected.getFullYear() &&
-            targetDate.getMonth() === selected.getMonth() &&
-            targetDate.getDate() === selected.getDate();
+            matchDate = targetDate >= today && targetDate <= endOfToday;
+          } else if (dateRange === "yesterday") {
+            const yest = new Date(today);
+            yest.setDate(today.getDate() - 1);
+            matchDate = targetDate >= yest && targetDate < today;
+          } else if (dateRange === "7days") {
+            const d7 = new Date(today);
+            d7.setDate(today.getDate() - 7);
+            const endOfToday = new Date(
+              today.getFullYear(),
+              today.getMonth(),
+              today.getDate(),
+              23,
+              59,
+              59,
+              999,
+            );
+            matchDate = targetDate >= d7 && targetDate <= endOfToday;
+          } else if (dateRange === "30days") {
+            const d30 = new Date(today);
+            d30.setDate(today.getDate() - 30);
+            const endOfToday = new Date(
+              today.getFullYear(),
+              today.getMonth(),
+              today.getDate(),
+              23,
+              59,
+              59,
+              999,
+            );
+            matchDate = targetDate >= d30 && targetDate <= endOfToday;
+          } else if (dateRange === "this_month") {
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(
+              now.getFullYear(),
+              now.getMonth() + 1,
+              0,
+              23,
+              59,
+              59,
+              999,
+            );
+            matchDate = targetDate >= firstDay && targetDate <= lastDay;
+          } else if (dateRange === "last_month") {
+            const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastDay = new Date(
+              now.getFullYear(),
+              now.getMonth(),
+              0,
+              23,
+              59,
+              59,
+              999,
+            );
+            matchDate = targetDate >= firstDay && targetDate <= lastDay;
+          } else if (dateRange === "specific_day" && specificDate) {
+            const selected = new Date(specificDate);
+            matchDate =
+              targetDate.getFullYear() === selected.getFullYear() &&
+              targetDate.getMonth() === selected.getMonth() &&
+              targetDate.getDate() === selected.getDate();
+          }
         }
       }
 
@@ -1112,20 +1315,44 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
         matchTour &&
         matchSaler &&
         matchDate &&
+        matchCustomerType &&
         (status === "all" || order.status === status)
       );
     });
 
     return list.sort((a, b) => {
-      let dateA = new Date(
-        dateType === "booking_date" ? a.booking_date : a.tour_date,
-      ).getTime();
-      let dateB = new Date(
-        dateType === "booking_date" ? b.booking_date : b.tour_date,
-      ).getTime();
-      if (isNaN(dateA)) dateA = new Date(a.created_at).getTime();
-      if (isNaN(dateB)) dateB = new Date(b.created_at).getTime();
-      return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      let dateA = 0;
+      let dateB = 0;
+      if (dateType === "booking_date") {
+        dateA = new Date(a.booking_date).getTime();
+        dateB = new Date(b.booking_date).getTime();
+        if (isNaN(dateA)) dateA = new Date(a.created_at).getTime();
+        if (isNaN(dateB)) dateB = new Date(b.created_at).getTime();
+        if (dateA === dateB) {
+          const timeA = new Date(a.created_at || 0).getTime();
+          const timeB = new Date(b.created_at || 0).getTime();
+          return sortOrder === "asc" ? timeA - timeB : timeB - timeA;
+        }
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      } else {
+        const monthsA = parseTourMonths(a.tour_date);
+        if (monthsA.length > 0) {
+          const [mA, yA] = monthsA[0].split("/").map(Number);
+          dateA = new Date(yA, mA - 1, 1).getTime();
+        } else {
+          dateA = new Date(a.created_at).getTime();
+        }
+        const monthsB = parseTourMonths(b.tour_date);
+        if (monthsB.length > 0) {
+          const [mB, yB] = monthsB[0].split("/").map(Number);
+          dateB = new Date(yB, mB - 1, 1).getTime();
+        } else {
+          dateB = new Date(b.created_at).getTime();
+        }
+        if (isNaN(dateA)) dateA = new Date(a.created_at).getTime();
+        if (isNaN(dateB)) dateB = new Date(b.created_at).getTime();
+        return sortOrder === "asc" ? dateA - dateB : dateB - dateA;
+      }
     });
   }, [
     orders,
@@ -1135,9 +1362,11 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
     queryTour,
     querySaler,
     status,
+    customerFilter,
     dateRange,
     dateType,
     specificDate,
+    selectedFilterMonths,
     admin,
     sortOrder,
   ]);
@@ -1172,21 +1401,37 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
       return;
     }
 
-    const dataToExport = orders.map((o: any) => ({
-      "Mã đơn": o.order_code,
-      "Ngày tạo đơn": o.booking_date ? new Date(o.booking_date).toLocaleDateString("vi-VN") : "",
-      "Người tạo": o.owner?.display_name || "",
-      "Khách hàng": o.customer_name,
-      "Số điện thoại": o.customer_phone,
-      "Email": o.customer_email || "",
-      "Tên Tour": o.tour_name,
-      "Loại phòng": o.room_type || "",
-      "Số khách": o.num_guests || 1,
-      "Ngày đi tour": o.tour_date ? new Date(o.tour_date).toLocaleDateString("vi-VN") : "",
-      "Trạng thái": statusMeta[o.status as OrderStatus]?.label || o.status,
-      "Đánh giá (Sao)": o.rating || "",
-      "Ghi chú": o.notes || "",
-    }));
+    const dataToExport = orders.map((o: Order) => {
+      const country = o.customer_country
+        ? ALL_COUNTRIES.find((c) => c.code === o.customer_country)?.name || o.customer_country
+        : "";
+      const source = o.request_source === "OTHER" && o.request_source_other
+        ? `Khác (${o.request_source_other})`
+        : o.request_source || "";
+
+      return {
+        "Mã đơn": o.order_code,
+        "Mã khách hàng": o.customer?.customer_code || "",
+        "Lần quay lại": o.return_visit?.visit_number ? `Lần #${o.return_visit.visit_number}` : "Lần #1",
+        "Ngày tạo đơn": o.booking_date ? new Date(o.booking_date).toLocaleDateString("vi-VN") : "",
+        "Người tạo": o.owner?.display_name || "",
+        "Khách hàng": o.customer_name,
+        "Số điện thoại": o.customer_phone,
+        "Email": o.customer_email || "",
+        "Quốc tịch": country,
+        "Destino": (o.destinations && o.destinations.length > 0) ? o.destinations.join(", ") : "Chưa có",
+        "Nguồn khách": source,
+        "Sản phẩm đã gửi": o.tour_name,
+        "Loại tour": o.tour_type === "privado" ? "Tour privado" : "Tour grupal",
+        "Tên tour riêng": o.tour_type === "privado" ? (o.private_tour_name || "") : "",
+        "Loại phòng": o.room_type || "",
+        "Số khách": o.num_guests || 1,
+        "Tháng khởi hành": parseTourMonths(o.tour_date).join(', ') || o.tour_date || "",
+        "Trạng thái": statusMeta[o.status]?.label || o.status,
+        "Đánh giá (Sao)": o.rating ? `${o.rating}★` : "",
+        "Ghi chú": o.notes || "",
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
@@ -1288,6 +1533,72 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
             )}
           </div>
           <div className="toolbar-actions">
+            {/* Bộ lọc Khách mới vs Khách quay lại (Requirements 2 & 17) */}
+            <div
+              style={{
+                display: "inline-flex",
+                background: "var(--bg-card-alt)",
+                borderRadius: "8px",
+                border: "1px solid var(--border-subtle)",
+                padding: "2px",
+                gap: "2px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setCustomerFilter("all")}
+                style={{
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  border: "none",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: customerFilter === "all" ? "var(--btn-primary-bg, #2563eb)" : "transparent",
+                  color: customerFilter === "all" ? "#ffffff" : "var(--text-dim)",
+                  transition: "all 0.15s",
+                }}
+              >
+                Tất cả khách
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomerFilter("new")}
+                style={{
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  border: "none",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: customerFilter === "new" ? "var(--btn-primary-bg, #2563eb)" : "transparent",
+                  color: customerFilter === "new" ? "#ffffff" : "var(--text-dim)",
+                  transition: "all 0.15s",
+                }}
+                title="Khách hàng tạo đơn lần đầu tiên (Lần #1)"
+              >
+                Khách mới
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomerFilter("returning")}
+                style={{
+                  padding: "5px 9px",
+                  borderRadius: "6px",
+                  border: "none",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  background: customerFilter === "returning" ? "#7c3aed" : "transparent",
+                  color: customerFilter === "returning" ? "#ffffff" : "var(--text-dim)",
+                  transition: "all 0.15s",
+                }}
+                title="Khách hàng đã quay lại từ lần #2 trở lên"
+              >
+                Khách quay lại
+              </button>
+            </div>
+
             <div className="filter-dropdown">
               <Button
                 variant="secondary"
@@ -1342,175 +1653,211 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                   setShowExportDropdown(false);
                 }}
                 className="date-button"
+                title={
+                  dateType === "tour_date" && selectedFilterMonths.length > 0
+                    ? `Tháng đi tour: ${selectedFilterMonths.map(formatSpanishMonthKey).join(", ")}`
+                    : undefined
+                }
               >
                 <CalendarDays size={16} />{" "}
-                {dateRange === "all"
-                  ? dateType === "booking_date"
-                    ? "Ngày tạo đơn"
-                    : "Ngày đi tour"
-                  : dateRange === "specific_day" && specificDate
-                    ? new Date(specificDate).toLocaleDateString("vi-VN")
-                    : dateMeta[dateRange]?.label}{" "}
+                {dateType === "tour_date" && selectedFilterMonths.length > 0
+                  ? selectedFilterMonths.length === 1
+                    ? `Tháng đi tour · ${formatSpanishMonthKey(selectedFilterMonths[0])}`
+                    : `Tháng đi tour · ${formatSpanishMonthKey(selectedFilterMonths[0])} +${selectedFilterMonths.length - 1}`
+                  : dateRange === "all"
+                    ? dateType === "booking_date"
+                      ? "Ngày tạo đơn"
+                      : "Tháng đi tour"
+                    : dateType === "tour_date"
+                      ? monthMeta[dateRange]?.label || "Tháng đi tour"
+                      : dateRange === "specific_day" && specificDate
+                        ? new Date(specificDate).toLocaleDateString("vi-VN")
+                        : dateMeta[dateRange]?.label}{" "}
                 <ChevronDown size={14} />
               </Button>
               {showDateFilters && (
-                <div className="dropdown-panel">
-                  <b>Loại ngày</b>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "5px",
-                      padding: "0 8px 10px",
-                      borderBottom: "1px solid var(--border-row)",
-                      marginBottom: "5px",
-                    }}
-                  >
+                <div className="dropdown-panel date-filter-panel">
+                  <div className="filter-section-title">Tiêu chí thời gian</div>
+                  <div className="filter-segmented-control">
                     <button
-                      style={{
-                        flex: 1,
-                        padding: "6px",
-                        textAlign: "center",
-                        background:
-                          dateType === "booking_date"
-                            ? "var(--nav-active-bg)"
-                            : "transparent",
-                        color:
-                          dateType === "booking_date"
-                            ? "var(--nav-active-text)"
-                            : "var(--text-dim)",
-                        borderRadius: "5px",
-                        fontSize: "10px",
-                        justifyContent: "center",
+                      type="button"
+                      className={`filter-segment-btn ${dateType === "booking_date" ? "active" : ""}`}
+                      onClick={() => {
+                        setDateType("booking_date");
+                        setDateRange("all");
+                        setSpecificDate("");
+                        setSelectedFilterMonths([]);
                       }}
-                      onClick={() => setDateType("booking_date")}
                     >
                       Ngày tạo đơn
                     </button>
                     <button
-                      style={{
-                        flex: 1,
-                        padding: "6px",
-                        textAlign: "center",
-                        background:
-                          dateType === "tour_date"
-                            ? "var(--nav-active-bg)"
-                            : "transparent",
-                        color:
-                          dateType === "tour_date"
-                            ? "var(--nav-active-text)"
-                            : "var(--text-dim)",
-                        borderRadius: "5px",
-                        fontSize: "10px",
-                        justifyContent: "center",
-                      }}
-                      onClick={() => setDateType("tour_date")}
-                    >
-                      Ngày đi tour
-                    </button>
-                  </div>
-                  <b>Thứ tự sắp xếp</b>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "5px",
-                      padding: "0 8px 10px",
-                      borderBottom: "1px solid var(--border-row)",
-                      marginBottom: "5px",
-                    }}
-                  >
-                    <button
-                      style={{
-                        flex: 1,
-                        padding: "6px",
-                        textAlign: "center",
-                        background:
-                          sortOrder === "desc"
-                            ? "var(--nav-active-bg)"
-                            : "transparent",
-                        color:
-                          sortOrder === "desc"
-                            ? "var(--nav-active-text)"
-                            : "var(--text-dim)",
-                        borderRadius: "5px",
-                        fontSize: "10px",
-                        justifyContent: "center",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                      onClick={() => setSortOrder("desc")}
-                    >
-                      <ArrowDown size={11} /> Giảm dần
-                    </button>
-                    <button
-                      style={{
-                        flex: 1,
-                        padding: "6px",
-                        textAlign: "center",
-                        background:
-                          sortOrder === "asc"
-                            ? "var(--nav-active-bg)"
-                            : "transparent",
-                        color:
-                          sortOrder === "asc"
-                            ? "var(--nav-active-text)"
-                            : "var(--text-dim)",
-                        borderRadius: "5px",
-                        fontSize: "10px",
-                        justifyContent: "center",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                      onClick={() => setSortOrder("asc")}
-                    >
-                      <ArrowUp size={11} /> Tăng dần
-                    </button>
-                  </div>
-                  <b>Lọc thời gian</b>
-                  {Object.keys(dateMeta).map((item) => (
-                    <button
-                      key={item}
+                      type="button"
+                      className={`filter-segment-btn ${dateType === "tour_date" ? "active" : ""}`}
                       onClick={() => {
-                        setDateRange(item);
+                        setDateType("tour_date");
+                        setDateRange("all");
                         setSpecificDate("");
-                        setShowDateFilters(false);
                       }}
                     >
-                      {dateRange === item && <Check size={14} />}
-                      {dateMeta[item].label}
+                      Tháng đi tour
                     </button>
-                  ))}
-                  <div
-                    style={{
-                      marginTop: "5px",
-                      borderTop: "1px solid var(--border-row)",
-                      paddingTop: "5px",
-                    }}
-                  >
-                    <b>Ngày cụ thể</b>
-                    <div style={{ padding: "0 8px", marginBottom: "5px" }}>
-                      <input
-                        type="date"
-                        value={specificDate}
-                        onChange={(e) => {
-                          setSpecificDate(e.target.value);
-                          if (e.target.value) setDateRange("specific_day");
-                          setShowDateFilters(false);
-                        }}
-                        style={{
-                          width: "100%",
-                          padding: "6px 8px",
-                          fontSize: "11px",
-                          background: "var(--bg-input)",
-                          color: "var(--text-main)",
-                          border: "1px solid var(--border-input)",
-                          borderRadius: "5px",
-                          outline: "none",
-                        }}
-                      />
-                    </div>
                   </div>
+
+                  {dateType === "tour_date" ? (
+                    <>
+                      <div className="filter-section-title">Khoảng thời gian</div>
+                      <div className="filter-preset-list">
+                        {Object.keys(monthMeta).map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            className={`filter-preset-btn ${dateRange === item && selectedFilterMonths.length === 0 ? "active" : ""}`}
+                            onClick={() => {
+                              setDateRange(item);
+                              setSelectedFilterMonths([]);
+                              setSpecificDate("");
+                              setShowDateFilters(false);
+                            }}
+                          >
+                            <span>{monthMeta[item].label}</span>
+                            {dateRange === item && selectedFilterMonths.length === 0 && <Check size={14} />}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="filter-divider" />
+
+                      <div className="filter-section-title">
+                        <span>Chọn tháng cụ thể</span>
+                        {selectedFilterMonths.length > 0 && (
+                          <span style={{ fontSize: "10px", color: "var(--brand-primary, #3b82f6)", fontWeight: 700, textTransform: "none" }}>
+                            Đang lọc {selectedFilterMonths.length} tháng
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Year Navigator */}
+                      <div className="cal-year-nav">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFilterPickerYear((y) => y - 1);
+                          }}
+                          title="Năm trước"
+                        >
+                          ‹
+                        </button>
+                        <span className="cal-year-title">Năm {filterPickerYear}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFilterPickerYear((y) => y + 1);
+                          }}
+                          title="Năm tiếp theo"
+                        >
+                          ›
+                        </button>
+                      </div>
+
+                      {/* 4x3 Month Grid with Spanish Abbreviations */}
+                      <div className="cal-month-grid">
+                        {SPANISH_MONTHS.map((sp) => {
+                          const monthKey = `${String(sp.num).padStart(2, "0")}/${filterPickerYear}`;
+                          const isSelected = selectedFilterMonths.includes(monthKey);
+                          return (
+                            <button
+                              key={sp.num}
+                              type="button"
+                              className={isSelected ? "selected" : ""}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFilterMonth(sp.num, filterPickerYear);
+                              }}
+                              title={`${sp.full} (${monthKey})`}
+                            >
+                              {sp.short}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Footer Actions (Instant Reactive Filter - No Apply Button) */}
+                      <div className="cal-footer">
+                        <button
+                          type="button"
+                          className="cal-clear-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearFilterMonths();
+                          }}
+                          style={{
+                            visibility: selectedFilterMonths.length > 0 ? "visible" : "hidden",
+                          }}
+                        >
+                          Xóa chọn ({selectedFilterMonths.length})
+                        </button>
+                        {selectedFilterMonths.length > 0 ? (
+                          <span style={{ fontSize: "11px", color: "var(--brand-primary, #3b82f6)", fontWeight: 600 }}>
+                            Đang lọc {selectedFilterMonths.length} tháng
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
+                            Chọn tháng để lọc ngay
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="filter-section-title">Lọc thời gian</div>
+                      <div className="filter-preset-list">
+                        {Object.keys(dateMeta).map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            className={`filter-preset-btn ${dateRange === item && !specificDate ? "active" : ""}`}
+                            onClick={() => {
+                              setDateRange(item);
+                              setSpecificDate("");
+                              setShowDateFilters(false);
+                            }}
+                          >
+                            <span>{dateMeta[item].label}</span>
+                            {dateRange === item && !specificDate && <Check size={14} />}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="filter-divider" />
+
+                      <div className="filter-section-title">Ngày cụ thể</div>
+                      <div style={{ padding: "0 4px 6px" }}>
+                        <input
+                          type="date"
+                          value={specificDate}
+                          onChange={(e) => {
+                            setSpecificDate(e.target.value);
+                            if (e.target.value) setDateRange("specific_day");
+                            setShowDateFilters(false);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "8px 10px",
+                            fontSize: "12px",
+                            background: "var(--bg-input)",
+                            color: "var(--text-main)",
+                            border: "1px solid var(--border-input)",
+                            borderRadius: "6px",
+                            outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -1578,7 +1925,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                 <input
                   value={queryTour}
                   onChange={(e) => setQueryTour(e.target.value)}
-                  placeholder="Tên tour..."
+                  placeholder="Tên sản phẩm đã gửi..."
                 />
                 {queryTour && (
                   <button
@@ -1675,9 +2022,101 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
           </div>
         )}
         <div className="table-meta">
-          <span>
-            <b>{filtered.length}</b> đơn tour
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+            <span>
+              <b>{filtered.length}</b> đơn tour
+            </span>
+            {dateType === "tour_date" && selectedFilterMonths.length > 0 && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  padding: "3px 10px",
+                  borderRadius: "14px",
+                  background: "var(--brand-primary, #0ea5e9)",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  boxShadow: "0 1px 3px rgba(14, 165, 233, 0.3)",
+                }}
+              >
+                <span>
+                  📅 Đang lọc Tháng khởi hành ({selectedFilterMonths.length}):{" "}
+                  <strong>{selectedFilterMonths.map(formatSpanishMonthKey).join(", ")}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={clearFilterMonths}
+                  style={{
+                    background: "rgba(255,255,255,0.25)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    color: "#ffffff",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "11px",
+                    lineHeight: 1,
+                    marginLeft: "2px",
+                  }}
+                  title="Bỏ lọc các tháng này"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+            {dateType === "booking_date" && specificDate && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  fontSize: "12px",
+                  padding: "3px 10px",
+                  borderRadius: "14px",
+                  background: "var(--brand-primary, #0ea5e9)",
+                  color: "#ffffff",
+                  fontWeight: 600,
+                  boxShadow: "0 1px 3px rgba(14, 165, 233, 0.3)",
+                }}
+              >
+                <span>
+                  📅 Đang lọc Ngày: <strong>{new Date(specificDate).toLocaleDateString("vi-VN")}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSpecificDate("");
+                    setDateRange("all");
+                  }}
+                  style={{
+                    background: "rgba(255,255,255,0.25)",
+                    border: "none",
+                    borderRadius: "50%",
+                    width: "16px",
+                    height: "16px",
+                    color: "#ffffff",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "11px",
+                    lineHeight: 1,
+                    marginLeft: "2px",
+                  }}
+                  title="Bỏ lọc ngày này"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+          </div>
           <span className="live-status">
             <i /> Cập nhật trực tiếp
           </span>
@@ -1737,13 +2176,13 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       )}
                     </div>
                   </th>
-                  <th style={{ width: admin ? '13%' : '16%' }}>KHÁCH HÀNG</th>
-                  <th style={{ width: admin ? '11%' : '13%' }}>
+                  <th style={{ width: admin ? '12%' : '14%' }}>KHÁCH HÀNG</th>
+                  <th style={{ width: admin ? '6%' : '7%', textAlign: 'center' }}>QUỐC TỊCH</th>
+                  <th style={{ width: admin ? '10%' : '11%' }}>
                     SỐ ĐIỆN THOẠI
                   </th>
-                  {admin && <th style={{ width: '12%' }}>NHÂN VIÊN SALE</th>}
-                  <th style={{ width: admin ? '23%' : '26%' }}>TOUR</th>
-                  <th style={{ width: admin ? '11%' : '12%' }}>QUỐC GIA</th>
+                  {admin && <th style={{ width: '11%' }}>NHÂN VIÊN SALE</th>}
+                  <th style={{ width: admin ? '19%' : '22%' }}>SẢN PHẨM ĐÃ GỬI</th>
                   <th
                     style={{
                       width: admin ? '10%' : '11%',
@@ -1758,7 +2197,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                         setSortOrder("desc");
                       }
                     }}
-                    title="Bấm để chuyển chiều sắp xếp Ngày đi tour"
+                    title="Bấm để chuyển chiều sắp xếp Tháng khởi hành"
                   >
                     <div
                       style={{
@@ -1767,7 +2206,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                         gap: "4px",
                       }}
                     >
-                      NGÀY ĐI TOUR{" "}
+                      THÁNG KHỞI HÀNH{" "}
                       {dateType === "tour_date" ? (
                         sortOrder === "asc" ? (
                           <ArrowUp size={12} />
@@ -1779,7 +2218,8 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       )}
                     </div>
                   </th>
-                  <th style={{ width: admin ? '11%' : '11%' }}>TRẠNG THÁI</th>
+                  <th style={{ width: admin ? '10%' : '11%' }}>LOẠI TOUR</th>
+                  <th style={{ width: admin ? '10%' : '11%' }}>TRẠNG THÁI</th>
                 </tr>
               </thead>
               <tbody>
@@ -1793,12 +2233,82 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       {new Date(order.booking_date).toLocaleDateString("vi-VN")}
                     </td>
                     <td>
-                      <span
-                        className="customer-name-pure"
-                        title={order.customer_name || "Khách hàng"}
-                      >
-                        {order.customer_name || "Chưa đặt tên"}
-                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span
+                          className="customer-name-pure"
+                          title={order.customer_name || "Khách hàng"}
+                        >
+                          {order.customer_name || "Chưa đặt tên"}
+                        </span>
+                        {order.return_visit && order.return_visit.visit_number > 1 && (
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (order.customer_id) openCustomerHistory(order.customer_id);
+                              }}
+                              style={{
+                                fontSize: "10px",
+                                fontWeight: 600,
+                                padding: "1px 6px",
+                                borderRadius: "4px",
+                                background: "rgba(139, 92, 246, 0.12)",
+                                color: "#8b5cf6",
+                                border: "1px solid rgba(139, 92, 246, 0.25)",
+                                cursor: order.customer_id ? "pointer" : "default",
+                                transition: "all 0.15s",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (order.customer_id) {
+                                  e.currentTarget.style.background = "rgba(139, 92, 246, 0.22)";
+                                  e.currentTarget.style.borderColor = "#8b5cf6";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "rgba(139, 92, 246, 0.12)";
+                                e.currentTarget.style.borderColor = "rgba(139, 92, 246, 0.25)";
+                              }}
+                              title={order.customer_id ? `Khách hàng quay lại lần ${order.return_visit.visit_number - 1} (Nhấp xem lịch sử)` : `Khách hàng quay lại lần ${order.return_visit.visit_number - 1}`}
+                            >
+                              Quay lại lần {order.return_visit.visit_number - 1}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      {order.customer_country ? (() => {
+                        const c = ALL_COUNTRIES.find(x => x.code === order.customer_country);
+                        const countryName = c?.name || order.customer_country;
+                        return (
+                          <div
+                            className="nationality-flag-badge"
+                            title={`Quốc tịch: ${countryName}`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              padding: '3px 6px',
+                              borderRadius: '5px',
+                              background: 'var(--bg-card-alt, rgba(255,255,255,0.03))',
+                              border: '1px solid var(--border-subtle, rgba(255,255,255,0.08))',
+                              cursor: 'pointer',
+                              transition: 'transform 0.15s ease, border-color 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'scale(1.1)';
+                              e.currentTarget.style.borderColor = 'var(--accent-primary, #60a5fa)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                              e.currentTarget.style.borderColor = 'var(--border-subtle, rgba(255,255,255,0.08))';
+                            }}
+                          >
+                            <CountryFlag code={order.customer_country} name={countryName} size="md" />
+                          </div>
+                        );
+                      })() : <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>—</span>}
                     </td>
                     <td>
                       {order.customer_phone ? (
@@ -1867,18 +2377,30 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                         </span>
                       )}
                     </td>
-                    <td style={{ overflow: 'hidden', maxWidth: 0 }}>
-                      {order.customer_country ? (() => {
-                        const c = ALL_COUNTRIES.find(x => x.code === order.customer_country);
+                    <td>
+                      {(() => {
+                        const info = formatDepartureMonths(order.tour_date);
                         return (
-                          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-main)', fontWeight: 500, fontSize: '12px' }}>
-                            {c?.name || order.customer_country}
-                          </span>
+                          <div className="departure-months-cell" title={info.fullText}>
+                            {info.count <= 1 ? (
+                              <span className="month-pill">{info.primary}</span>
+                            ) : (
+                              <>
+                                <span className="month-pill">{info.all[0]}</span>
+                                <span
+                                  className="month-pill-more"
+                                  title={info.all.slice(1).join(" · ")}
+                                >
+                                  +{info.count - 1}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         );
-                      })() : <span style={{ color: 'var(--text-dim)', fontSize: '12px' }}>—</span>}
+                      })()}
                     </td>
-                    <td className="muted">
-                      {new Date(order.tour_date).toLocaleDateString("vi-VN")}
+                    <td>
+                      <TourTypeBadge type={order.tour_type} />
                     </td>
                     <td>
                       <Badge status={order.status} />
@@ -1909,7 +2431,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                       {order.customer_name || "Chưa đặt tên"}
                     </span>
                     <span className="order-code-badge">
-                      #{order.order_code} · {new Date(order.booking_date).toLocaleDateString("vi-VN")}
+                      #{order.order_code} {order.return_visit && order.return_visit.visit_number > 1 ? `· Quay lại lần ${order.return_visit.visit_number - 1}` : ''} · {new Date(order.booking_date).toLocaleDateString("vi-VN")}
                     </span>
                   </div>
                   <Badge status={order.status} />
@@ -1921,6 +2443,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                 </div>
 
                 <div className="order-card-badges">
+                  <TourTypeBadge type={order.tour_type} />
                   <RequestSourceBadge
                     source={order.request_source}
                     sourceOther={order.request_source_other}
@@ -1974,8 +2497,8 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
                   </div>
 
                   <div className="order-card-dates">
-                    <span className="order-tour-date" title="Ngày đi tour">
-                      <CalendarDays size={11} /> {new Date(order.tour_date).toLocaleDateString("vi-VN")}
+                    <span className="order-tour-date" title="Tháng khởi hành">
+                      <CalendarDays size={11} /> {formatDepartureMonths(order.tour_date).primary}
                     </span>
                     <ChevronRight size={15} className="order-card-arrow" />
                   </div>
@@ -2016,11 +2539,26 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
           </div>
         </div>
       </Card>
+
+      <CustomerHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        data={customerHistoryData}
+        loading={loadingCustomerHistory}
+      />
     </>
   );
 }
 
-function CountrySelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function CountrySelect({
+  value,
+  onChange,
+  label = "Quốc tịch",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  label?: string;
+}) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
 
@@ -2033,14 +2571,14 @@ function CountrySelect({ value, onChange }: { value: string; onChange: (v: strin
 
   return (
     <div className="field" style={{ position: "relative" }}>
-      <span>Quốc gia</span>
+      <span>{label}</span>
       <div
         className="input-wrap"
         onClick={() => setOpen(true)}
       >
         <input
           type="text"
-          placeholder="Tìm quốc gia..."
+          placeholder="Tìm quốc tịch..."
           value={open ? search : displayValue}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -2081,6 +2619,9 @@ function CountrySelect({ value, onChange }: { value: string; onChange: (v: strin
                 padding: "8px 12px",
                 cursor: "pointer",
                 background: value === c.code ? "var(--bg-hover)" : "transparent",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
               }}
               onClick={() => {
                 onChange(c.code);
@@ -2089,7 +2630,8 @@ function CountrySelect({ value, onChange }: { value: string; onChange: (v: strin
               }}
               onMouseDown={(e) => e.preventDefault()}
             >
-              {c.flag} {c.name}
+              <CountryFlag code={c.code} size="sm" />
+              <span>{c.name}</span>
             </div>
           ))}
           {filtered.length === 0 && <div style={{ padding: "8px 12px", color: "var(--text-dim)" }}>Không tìm thấy</div>}
@@ -2116,9 +2658,17 @@ function OrderForm() {
     status: "new" as OrderStatus,
     notes: "",
     customer_country: "",
+    destinations: [] as string[],
     request_source: "",
     request_source_other: "",
+    tour_type: "grupal" as TourType,
+    private_tour_name: "",
+    private_tour_pdf_path: null as string | null,
   });
+  const [newPdfFile, setNewPdfFile] = useState<File | null>(null);
+  const [removeExistingPdf, setRemoveExistingPdf] = useState(false);
+  const [existingPdfSignedUrl, setExistingPdfSignedUrl] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState("");
   const [tours, setTours] = useState<Tour[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [currentOwner, setCurrentOwner] = useState<{
@@ -2128,6 +2678,17 @@ function OrderForm() {
   } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const [customerState, setCustomerState] = useState<CustomerSelectionState>({
+    mode: "new",
+    selectedCustomer: null,
+    returnVisitDecision: "new_visit",
+    existingVisitId: null,
+    targetVisitNumber: 1,
+  });
+  const [initialCustomer, setInitialCustomer] = useState<Customer | null>(null);
+  const [initialVisit, setInitialVisit] = useState<CustomerReturnVisit | null>(null);
+  const [existingOrderCustomerId, setExistingOrderCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
     // Tải danh sách tour và dạng phòng được định nghĩa trong Settings
@@ -2152,10 +2713,18 @@ function OrderForm() {
         );
       let q = supabase
         .from("orders")
-        .select("*, owner:profiles(display_name, username, avatar_url)");
+        .select("*, owner:profiles(display_name, username, avatar_url), customer:customers(*), return_visit:customer_return_visits(*)");
       q = isUuid ? q.eq("id", id) : q.eq("order_code", id);
       q.maybeSingle().then(({ data }) => {
         if (data) {
+          setExistingOrderCustomerId(data.customer_id || null);
+          if (data.customer) {
+            setInitialCustomer(data.customer as Customer);
+          }
+          if (data.return_visit) {
+            setInitialVisit(data.return_visit as CustomerReturnVisit);
+          }
+
           setForm({
             customer_name: data.customer_name,
             customer_phone: data.customer_phone,
@@ -2172,28 +2741,72 @@ function OrderForm() {
             status: data.status,
             notes: data.notes || "",
             customer_country: data.customer_country || "",
+            destinations: Array.isArray(data.destinations) ? data.destinations : [],
             request_source: data.request_source || "",
             request_source_other: data.request_source_other || "",
+            tour_type: (data.tour_type as TourType) || "grupal",
+            private_tour_name: data.private_tour_name || "",
+            private_tour_pdf_path: data.private_tour_pdf_path || null,
           });
           setCurrentOwner(data.owner || null);
+
+          if (data.private_tour_pdf_path) {
+            supabase.storage
+              .from("private-tour-programs")
+              .createSignedUrl(data.private_tour_pdf_path, 3600)
+              .then(({ data: signedData }) => {
+                if (signedData?.signedUrl) {
+                  setExistingPdfSignedUrl(signedData.signedUrl);
+                }
+              });
+          }
         }
       });
     }
   }, [id]);
 
-  function update(key: string, value: any) {
+  function update(key: keyof typeof form, value: any) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    setPdfError("");
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      setPdfError("Chỉ chấp nhận file định dạng PDF (.pdf). Vui lòng chọn lại.");
+      e.target.value = "";
+      return;
+    }
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setPdfError("Tên file phải có đuôi mở rộng .pdf.");
+      e.target.value = "";
+      return;
+    }
+
+    const MAX_SIZE = 20 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setPdfError("Dung lượng file PDF vượt quá giới hạn 20MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setNewPdfFile(file);
+    setRemoveExistingPdf(false);
   }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (form.tour_date < form.booking_date) {
-      setError("Ngày đi tour phải từ ngày tạo đơn trở đi.");
+    if (!form.tour_name.trim()) {
+      setError("Vui lòng chọn hoặc nhập sản phẩm đã gửi.");
       return;
     }
-    if (!form.tour_name.trim()) {
-      setError("Vui lòng chọn tour du lịch.");
+    const departureMonths = parseTourMonths(form.tour_date);
+    if (departureMonths.length === 0) {
+      setError("Vui lòng chọn ít nhất 1 tháng khởi hành mong muốn.");
       return;
     }
     setBusy(true);
@@ -2222,9 +2835,62 @@ function OrderForm() {
     const safeGuests =
       !isNaN(parsedGuests) && parsedGuests > 0 ? parsedGuests : 1;
 
+    const isPrivado = form.tour_type === "privado";
+    const privateTourName = isPrivado ? form.private_tour_name.trim() || null : null;
+
     let result;
     if (editing) {
+      const isUuid =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          id!,
+        );
+
+      let finalPdfPath: string | null = form.private_tour_pdf_path;
+
+      // If switched to grupal or removed existing PDF
+      if (!isPrivado || removeExistingPdf) {
+        finalPdfPath = null;
+      }
+
+      // If user selected a new PDF file to upload:
+      if (isPrivado && newPdfFile) {
+        const orderIdentifier = id!;
+        const cleanName = newPdfFile.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+        const uploadPath = `${orderIdentifier}/${Date.now()}-${cleanName}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from("private-tour-programs")
+          .upload(uploadPath, newPdfFile, {
+            contentType: "application/pdf",
+            upsert: false,
+          });
+
+        if (uploadErr) {
+          setError(`Lỗi upload PDF: ${uploadErr.message}`);
+          setBusy(false);
+          return;
+        }
+
+        finalPdfPath = uploadPath;
+      }
+
       // Khi sửa đơn: Giữ nguyên người phụ trách (owner_id) ban đầu, tuyệt đối KHÔNG ghi đè bằng user.id của người sửa
+      if (existingOrderCustomerId) {
+        await supabase
+          .from("customers")
+          .update({
+            full_name: form.customer_name.trim(),
+            phone: form.customer_phone ? form.customer_phone.trim() : null,
+            email: form.customer_email ? form.customer_email.trim() : null,
+            country: form.customer_country || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingOrderCustomerId);
+      }
+
       const updatePayload = {
         customer_name: form.customer_name,
         customer_phone: form.customer_phone,
@@ -2241,20 +2907,113 @@ function OrderForm() {
         status: form.status,
         notes: form.notes || null,
         customer_country: form.customer_country || null,
+        destinations: form.destinations || [],
         request_source: form.request_source || null,
         request_source_other: form.request_source_other || null,
+        tour_type: form.tour_type,
+        private_tour_name: privateTourName,
+        private_tour_pdf_path: finalPdfPath,
         updated_at: new Date().toISOString(),
       };
-      const isUuid =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-          id!,
-        );
+
       let query = supabase.from("orders").update(updatePayload);
       query = isUuid ? query.eq("id", id) : query.eq("order_code", id);
       result = await query;
+
+      if (!result.error) {
+        // If old PDF existed and was replaced or removed:
+        if (
+          form.private_tour_pdf_path &&
+          form.private_tour_pdf_path !== finalPdfPath
+        ) {
+          await supabase.storage
+            .from("private-tour-programs")
+            .remove([form.private_tour_pdf_path]);
+        }
+      }
     } else {
-      // Khi tạo mới: Gán người tạo làm owner_id ban đầu
+      // Khi tạo mới:
+      let resolvedCustomerId: string | null = null;
+      let resolvedReturnVisitId: string | null = null;
+
+      try {
+        if (customerState.mode === "new" || !customerState.selectedCustomer) {
+          // Tạo khách hàng mới + Return Visit #1
+          const { customer: newCust, visit: firstVisit } =
+            await createNewCustomerWithFirstVisit({
+              full_name: form.customer_name,
+              phone: form.customer_phone,
+              email: form.customer_email,
+              country: form.customer_country,
+            });
+          resolvedCustomerId = newCust.id;
+          resolvedReturnVisitId = firstVisit.id;
+        } else {
+          // Khách hàng cũ
+          resolvedCustomerId = customerState.selectedCustomer.id;
+
+          // Cập nhật thông tin khách hàng mới nhất nếu có chỉnh sửa trên form
+          await supabase
+            .from("customers")
+            .update({
+              full_name: form.customer_name.trim(),
+              phone: form.customer_phone ? form.customer_phone.trim() : null,
+              email: form.customer_email ? form.customer_email.trim() : null,
+              country: form.customer_country || null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", resolvedCustomerId);
+
+          if (
+            customerState.returnVisitDecision === "same_visit" &&
+            customerState.existingVisitId
+          ) {
+            resolvedReturnVisitId = customerState.existingVisitId;
+          } else {
+            // Tạo Return Visit mới cho khách
+            const newVisit = await createCustomerReturnVisit(
+              customerState.selectedCustomer.id,
+              `Đơn tour: ${form.tour_name}`
+            );
+            resolvedReturnVisitId = newVisit.id;
+          }
+        }
+      } catch (cusErr: any) {
+        setError(`Lỗi quản lý khách hàng: ${cusErr.message || cusErr}`);
+        setBusy(false);
+        return;
+      }
+
+      const newOrderId = crypto.randomUUID();
+      let uploadedPdfPath: string | null = null;
+
+      if (isPrivado && newPdfFile) {
+        const cleanName = newPdfFile.name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_");
+        const uploadPath = `${newOrderId}/${Date.now()}-${cleanName}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from("private-tour-programs")
+          .upload(uploadPath, newPdfFile, {
+            contentType: "application/pdf",
+            upsert: false,
+          });
+
+        if (uploadErr) {
+          setError(`Lỗi upload PDF: ${uploadErr.message}`);
+          setBusy(false);
+          return;
+        }
+
+        uploadedPdfPath = uploadPath;
+      }
+
       const insertPayload = {
+        id: newOrderId,
+        customer_id: resolvedCustomerId,
+        return_visit_id: resolvedReturnVisitId,
         customer_name: form.customer_name,
         customer_phone: form.customer_phone,
         customer_email: form.customer_email || null,
@@ -2270,11 +3029,22 @@ function OrderForm() {
         status: form.status,
         notes: form.notes || null,
         customer_country: form.customer_country || null,
+        destinations: form.destinations || [],
         request_source: form.request_source || null,
         request_source_other: form.request_source_other || null,
+        tour_type: form.tour_type,
+        private_tour_name: privateTourName,
+        private_tour_pdf_path: uploadedPdfPath,
         owner_id: user.id,
       };
+
       result = await supabase.from("orders").insert(insertPayload);
+
+      if (result.error && uploadedPdfPath) {
+        await supabase.storage
+          .from("private-tour-programs")
+          .remove([uploadedPdfPath]);
+      }
     }
 
     setBusy(false);
@@ -2334,9 +3104,30 @@ function OrderForm() {
             </span>
             <div>
               <h2>Thông tin khách hàng</h2>
-              <p>Thông tin liên hệ của khách hàng.</p>
+              <p>Quản lý định danh khách hàng & nhận diện khách quay lại.</p>
             </div>
           </div>
+
+          <CustomerSelectionSection
+            tourDate={form.tour_date}
+            excludeOrderId={editing ? id : undefined}
+            initialCustomer={initialCustomer}
+            initialVisit={initialVisit}
+            isEditing={editing}
+            customerPhone={form.customer_phone}
+            customerEmail={form.customer_email}
+            onCustomerStateChange={setCustomerState}
+            onCustomerSelected={(cust) => {
+              setForm((prev) => ({
+                ...prev,
+                customer_name: cust.full_name,
+                customer_phone: cust.phone || prev.customer_phone,
+                customer_email: cust.email || prev.customer_email,
+                customer_country: cust.country || prev.customer_country,
+              }));
+            }}
+          />
+
           <div className="form-grid two">
             <Input
               label="Họ và tên"
@@ -2369,17 +3160,220 @@ function OrderForm() {
               <ClipboardList size={17} />
             </span>
             <div>
-              <h2>Thông tin đơn tour</h2>
-              <p>Lịch trình và trạng thái đặt tour.</p>
+              <h2>Thông tin sản phẩm & dịch vụ</h2>
+              <p>Lịch trình, loại tour và trạng thái đặt tour.</p>
             </div>
           </div>
+
+          {/* Trường Chọn Loại tour */}
+          <div className="field" style={{ marginBottom: "16px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-heading)", display: "block", marginBottom: "6px" }}>
+              Loại tour<em> *</em>
+            </span>
+            <div className="tour-type-selector-grid">
+              <div
+                className={`tour-type-option-card ${form.tour_type === "grupal" ? "selected" : ""}`}
+                onClick={() => {
+                  update("tour_type", "grupal");
+                  setPdfError("");
+                }}
+              >
+                <div className="tour-type-radio-circle">
+                  {form.tour_type === "grupal" && <div className="tour-type-radio-dot" />}
+                </div>
+                <div className="tour-type-option-content">
+                  <div className="tour-type-option-title">
+                    <Users size={15} style={{ color: "#2563eb" }} />
+                    <span>Tour grupal</span>
+                  </div>
+                  <span className="tour-type-option-desc">Tour ghép đoàn lịch trình tiêu chuẩn</span>
+                </div>
+              </div>
+
+              <div
+                className={`tour-type-option-card ${form.tour_type === "privado" ? "selected privado" : ""}`}
+                onClick={() => {
+                  update("tour_type", "privado");
+                  setPdfError("");
+                }}
+              >
+                <div className="tour-type-radio-circle">
+                  {form.tour_type === "privado" && <div className="tour-type-radio-dot" />}
+                </div>
+                <div className="tour-type-option-content">
+                  <div className="tour-type-option-title">
+                    <UserRound size={15} style={{ color: "#7c3aed" }} />
+                    <span>Tour privado</span>
+                  </div>
+                  <span className="tour-type-option-desc">Tour riêng có tên riêng & PDF chương trình</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Cấu hình cho Tour Privado: Tên tour riêng & Upload PDF */}
+          {form.tour_type === "privado" && (
+            <div
+              style={{
+                background: "rgba(139, 92, 246, 0.04)",
+                border: "1px dashed rgba(139, 92, 246, 0.3)",
+                borderRadius: "10px",
+                padding: "16px",
+                marginBottom: "20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "14px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <UserRound size={16} style={{ color: "#7c3aed" }} />
+                <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-heading)" }}>
+                  Cấu hình Tour Privado (Tour riêng)
+                </span>
+              </div>
+
+              <Input
+                label="Tên tour riêng"
+                value={form.private_tour_name}
+                onChange={(v) => update("private_tour_name", v)}
+                placeholder="Ví dụ: Vietnam - Tailandia 18 días"
+              />
+
+              <div className="field">
+                <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-heading)", display: "block", marginBottom: "6px" }}>
+                  Chương trình tour (PDF)
+                </span>
+
+                {newPdfFile ? (
+                  <div className="pdf-preview-box">
+                    <div className="pdf-file-info">
+                      <div className="pdf-file-icon">
+                        <FileText size={20} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="pdf-file-name" title={newPdfFile.name}>
+                          {newPdfFile.name}
+                        </div>
+                        <div className="pdf-file-meta">
+                          {(newPdfFile.size / 1024 / 1024).toFixed(2)} MB · File mới chuẩn bị lưu
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pdf-actions">
+                      <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: "12px", padding: "6px 12px" }}>
+                        Thay file
+                        <input
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          style={{ display: "none" }}
+                          onChange={handleFileSelect}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        style={{ fontSize: "12px", padding: "6px 12px" }}
+                        onClick={() => {
+                          setNewPdfFile(null);
+                          setPdfError("");
+                        }}
+                      >
+                        Hủy chọn
+                      </button>
+                    </div>
+                  </div>
+                ) : form.private_tour_pdf_path && !removeExistingPdf ? (
+                  <div className="pdf-preview-box">
+                    <div className="pdf-file-info">
+                      <div className="pdf-file-icon">
+                        <FileText size={20} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="pdf-file-name" title={getFileNameFromPath(form.private_tour_pdf_path)}>
+                          {getFileNameFromPath(form.private_tour_pdf_path)}
+                        </div>
+                        <div className="pdf-file-meta">
+                          Chương trình tour hiện tại trên hệ thống
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pdf-actions">
+                      {existingPdfSignedUrl && (
+                        <a
+                          href={existingPdfSignedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-secondary"
+                          style={{ fontSize: "12px", padding: "6px 12px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                        >
+                          <Eye size={13} /> Xem
+                        </a>
+                      )}
+                      <label className="btn btn-secondary" style={{ cursor: "pointer", fontSize: "12px", padding: "6px 12px" }}>
+                        Thay file
+                        <input
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          style={{ display: "none" }}
+                          onChange={handleFileSelect}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        style={{ fontSize: "12px", padding: "6px 12px" }}
+                        onClick={() => {
+                          setRemoveExistingPdf(true);
+                          setPdfError("");
+                        }}
+                      >
+                        Xóa
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="pdf-upload-dropzone">
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      style={{ display: "none" }}
+                      onChange={handleFileSelect}
+                    />
+                    <FileUp size={28} style={{ color: "#8b5cf6" }} />
+                    <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-main)" }}>
+                      Chọn file PDF chương trình tour
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--text-dim)" }}>
+                      Hỗ trợ file định dạng .pdf (Tối đa 20MB)
+                    </div>
+                  </label>
+                )}
+
+                {pdfError && (
+                  <div style={{ fontSize: "11px", color: "var(--error-text)", marginTop: "6px", fontWeight: 500 }}>
+                    {pdfError}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Destino (Multi-select) */}
+          <div style={{ marginBottom: "16px" }}>
+            <DestinationMultiSelect
+              value={form.destinations}
+              onChange={(v) => update("destinations", v)}
+            />
+          </div>
+
           <div className="form-grid two">
             <Select
-              label="Tên tour"
+              label="Sản phẩm đã gửi"
               value={form.tour_name}
               onChange={(v) => update("tour_name", v)}
+              required
             >
-              <option value="">-- Chọn tour du lịch --</option>
+              <option value="">-- Chọn sản phẩm đã gửi --</option>
               {editing &&
                 form.tour_name &&
                 !tours.some(
@@ -2447,25 +3441,24 @@ function OrderForm() {
               type="date"
               required
             />
-            <Input
-              label="Ngày đi tour"
-              value={form.tour_date}
-              onChange={(v) => update("tour_date", v)}
-              type="date"
-              required
-            />
+            <Select
+              label="Trạng thái"
+              value={form.status}
+              onChange={(v) => update("status", v)}
+            >
+              {Object.entries(statusMeta).map(([key, value]) => (
+                <option key={key} value={key}>
+                  {value.label}
+                </option>
+              ))}
+            </Select>
           </div>
-          <Select
-            label="Trạng thái"
-            value={form.status}
-            onChange={(v) => update("status", v)}
-          >
-            {Object.entries(statusMeta).map(([key, value]) => (
-              <option key={key} value={key}>
-                {value.label}
-              </option>
-            ))}
-          </Select>
+          <MonthMultiSelector
+            label="Tháng khởi hành mong muốn"
+            value={form.tour_date}
+            onChange={(v) => update("tour_date", v)}
+            required
+          />
         </Card>
         <Card>
           <div className="card-title">
@@ -2670,8 +3663,26 @@ function OrderDetail() {
   const [loading, setLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState(false);
-  const [copiedId, setCopiedId] = useState(false);
+  const [copiedCustomerCode, setCopiedCustomerCode] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [customerHistoryData, setCustomerHistoryData] = useState<CustomerHistoryData | null>(null);
+  const [loadingCustomerHistory, setLoadingCustomerHistory] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [pdfSignedUrl, setPdfSignedUrl] = useState<string | null>(null);
+  const [loadingPdfUrl, setLoadingPdfUrl] = useState(false);
+
+  async function openCustomerHistory(customerId: string) {
+    setHistoryModalOpen(true);
+    setLoadingCustomerHistory(true);
+    try {
+      const data = await getCustomerHistory(customerId);
+      setCustomerHistoryData(data);
+    } catch (err) {
+      console.error("Lỗi khi tải lịch sử khách hàng:", err);
+    } finally {
+      setLoadingCustomerHistory(false);
+    }
+  }
 
   useEffect(() => {
     if (!id) return;
@@ -2682,13 +3693,33 @@ function OrderDetail() {
       );
     let q = supabase
       .from("orders")
-      .select("*, owner:profiles(display_name, username, avatar_url)");
+      .select("*, owner:profiles(display_name, username, avatar_url), customer:customers(*), return_visit:customer_return_visits(*)");
     q = isUuid ? q.eq("id", id) : q.eq("order_code", id);
     q.maybeSingle().then(({ data }) => {
       setOrder(data as Order | null);
       setLoading(false);
     });
   }, [id]);
+
+  // Sinh signed URL bảo mật cho file PDF chương trình tour nếu có
+  useEffect(() => {
+    if (order?.private_tour_pdf_path) {
+      setLoadingPdfUrl(true);
+      supabase.storage
+        .from("private-tour-programs")
+        .createSignedUrl(order.private_tour_pdf_path, 3600)
+        .then(({ data, error }) => {
+          setLoadingPdfUrl(false);
+          if (data?.signedUrl) {
+            setPdfSignedUrl(data.signedUrl);
+          } else if (error) {
+            console.error("Lỗi khi tạo signed URL PDF:", error);
+          }
+        });
+    } else {
+      setPdfSignedUrl(null);
+    }
+  }, [order?.private_tour_pdf_path]);
 
   // Click outside to close status dropdown
   useEffect(() => {
@@ -2730,21 +3761,20 @@ function OrderDetail() {
       !window.confirm(`Bạn có chắc chắn muốn xóa đơn tour ${order.order_code}?`)
     )
       return;
+
+    // Xóa file PDF trong storage nếu có
+    if (order.private_tour_pdf_path) {
+      await supabase.storage
+        .from("private-tour-programs")
+        .remove([order.private_tour_pdf_path]);
+    }
+
     const { error } = await supabase.from("orders").delete().eq("id", order.id);
     if (error) {
       alert(`Không thể xóa đơn: ${error.message}`);
       return;
     }
     navigate(isAdmin ? "/admin/orders" : "/orders");
-  }
-
-  async function handleQuickRate(newRating: number) {
-    if (!order) return;
-    setOrder((prev) => (prev ? { ...prev, rating: newRating } : null));
-    await supabase
-      .from("orders")
-      .update({ rating: newRating, updated_at: new Date().toISOString() })
-      .eq("id", order.id);
   }
 
   async function handleQuickStatus(newStatus: OrderStatus) {
@@ -2757,7 +3787,7 @@ function OrderDetail() {
       .eq("id", order.id);
   }
 
-  function handleCopy(text: string, type: "code" | "phone" | "id") {
+  function handleCopy(text: string, type: "code" | "phone") {
     navigator.clipboard.writeText(text);
     if (type === "code") {
       setCopiedCode(true);
@@ -2765,28 +3795,41 @@ function OrderDetail() {
     } else if (type === "phone") {
       setCopiedPhone(true);
       setTimeout(() => setCopiedPhone(false), 1800);
-    } else {
-      setCopiedId(true);
-      setTimeout(() => setCopiedId(false), 1800);
     }
   }
 
-  // Days countdown calculation
+  // Departure months calculation
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const tDay = new Date(order.tour_date);
-  tDay.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil(
-    (tDay.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-  );
+  const departureMonths = parseTourMonths(order.tour_date);
+  let departureBadgeText = "Chưa có tháng đi tour";
+  let departureStatusType: "current" | "future" | "past" | "none" = "none";
+  if (departureMonths.length > 0) {
+    const firstM = departureMonths[0];
+    const [mNum, yNum] = firstM.split("/").map(Number);
+    const targetMonthDate = new Date(yNum, mNum - 1, 1);
+    const currentMonthDate = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthDiff =
+      (targetMonthDate.getFullYear() - currentMonthDate.getFullYear()) * 12 +
+      (targetMonthDate.getMonth() - currentMonthDate.getMonth());
+    if (monthDiff > 0) {
+      departureBadgeText = `Dự kiến khởi hành sau ${monthDiff} tháng (${firstM})`;
+      departureStatusType = "future";
+    } else if (monthDiff === 0) {
+      departureBadgeText = `Khởi hành trong tháng này 🎉 (${firstM})`;
+      departureStatusType = "current";
+    } else {
+      departureBadgeText = `Tháng khởi hành đã qua (${firstM})`;
+      departureStatusType = "past";
+    }
+  }
 
-  // Customer initials
-  const customerInitials = (order.customer_name || "KH")
-    .trim()
-    .split(/\s+/)
-    .slice(-2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
+  const departureRangeText =
+    departureMonths.length === 0
+      ? "Chưa xác định"
+      : departureMonths.length === 1
+      ? departureMonths[0]
+      : `${departureMonths[0]} → ${departureMonths[departureMonths.length - 1]}`;
 
   return (
     <div className="od-shell">
@@ -2981,7 +4024,7 @@ function OrderDetail() {
             <Compass size={20} />
           </div>
           <div className="od-metric-info">
-            <span className="od-metric-label">Tour du lịch</span>
+            <span className="od-metric-label">Sản phẩm đã gửi</span>
             <span className="od-metric-val" title={order.tour_name}>
               {order.tour_name}
             </span>
@@ -3017,9 +4060,12 @@ function OrderDetail() {
             <CalendarDays size={20} />
           </div>
           <div className="od-metric-info">
-            <span className="od-metric-label">Ngày khởi hành</span>
-            <span className="od-metric-val">
-              {new Date(order.tour_date).toLocaleDateString("vi-VN")}
+            <span className="od-metric-label">Tháng khởi hành</span>
+            <span
+              className="od-metric-val"
+              title={formatDepartureMonths(order.tour_date).fullText}
+            >
+              {departureRangeText}
             </span>
           </div>
         </div>
@@ -3035,6 +4081,18 @@ function OrderDetail() {
             </span>
           </div>
         </div>
+
+        <div className="od-metric-card">
+          <div className={`od-metric-icon ${order.tour_type === "privado" ? "purple" : "blue"}`}>
+            {order.tour_type === "privado" ? <UserRound size={20} /> : <Users size={20} />}
+          </div>
+          <div className="od-metric-info">
+            <span className="od-metric-label">Loại tour</span>
+            <span className="od-metric-val">
+              <TourTypeBadge type={order.tour_type} />
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Main 2-Column Grid */}
@@ -3042,61 +4100,117 @@ function OrderDetail() {
         {/* Left Column: Trip Overview & Notes */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Timeline Card */}
-          <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-main)] p-6 shadow-sm">
-            <h2 className="text-[13px] font-bold uppercase tracking-wider text-[var(--text-dim)] mb-6">
-              Hành trình chuyến đi
-            </h2>
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6 md:gap-0">
-              <div className="text-center md:text-left w-full md:w-auto">
-                <div className="text-[11px] text-[var(--text-dim)] uppercase tracking-widest mb-2">
-                  Ngày tạo đơn
-                </div>
-                <div className="text-lg font-bold text-[var(--text-heading)]">
-                  {new Date(order.booking_date).toLocaleDateString("vi-VN")}
-                </div>
+          <div className="od-timeline-card">
+            {/* Left: Ngày tạo đơn */}
+            <div className="od-timeline-point left">
+              <span className="od-timeline-label">
+                Ngày tạo đơn
+              </span>
+              <div className="od-timeline-date">
+                {new Date(order.booking_date).toLocaleDateString("vi-VN", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
               </div>
+            </div>
 
-              <div className="flex-1 px-4 md:px-8 flex flex-col items-center gap-3 w-full md:w-auto">
-                <span
-                  className="text-xs font-semibold px-4 py-1.5 rounded-full"
-                  style={{
-                    background: "var(--status-new-bg)",
-                    color: "var(--status-new-text)",
-                    border: "1px solid var(--status-new-text)",
-                  }}
-                >
-                  {diffDays > 0
-                    ? `Còn ${diffDays} ngày nữa khởi hành`
-                    : diffDays === 0
-                      ? "Khởi hành hôm nay 🎉"
-                      : "Đã khởi hành"}
-                </span>
-
-                {/* Horizontal line for desktop */}
-                <div className="hidden md:flex w-full items-center gap-2">
-                  <div
-                    className="flex-1 h-[1px] opacity-30 border-t border-dashed"
-                    style={{ borderColor: "var(--text-main)" }}
-                  />
-                  <ArrowRight size={16} style={{ color: "var(--text-dim)" }} />
-                </div>
-                {/* Vertical line for mobile */}
-                <div
-                  className="flex md:hidden h-8 w-[1px] opacity-30 border-l border-dashed"
-                  style={{ borderColor: "var(--text-main)" }}
-                />
+            {/* Middle: Transit Line & Status Badge */}
+            <div className="od-timeline-connector">
+              <span className={`od-timeline-badge ${departureStatusType}`}>
+                {departureBadgeText}
+              </span>
+              <div className="od-timeline-line-wrap">
+                <div className="od-timeline-line" />
+                <ArrowRight size={15} className="od-timeline-arrow" />
               </div>
+            </div>
 
-              <div className="text-center md:text-right w-full md:w-auto">
-                <div className="text-[11px] text-[var(--text-dim)] uppercase tracking-widest mb-2">
-                  Ngày đi tour
-                </div>
-                <div className="text-lg font-bold text-[var(--text-heading)]">
-                  {new Date(order.tour_date).toLocaleDateString("vi-VN")}
-                </div>
+            {/* Right: Tháng khởi hành */}
+            <div className="od-timeline-point right">
+              <span className="od-timeline-label">
+                Tháng khởi hành
+              </span>
+              <div
+                className="od-timeline-date"
+                title={departureMonths.length > 0 ? departureMonths.join(" · ") : undefined}
+              >
+                {departureRangeText}
               </div>
             </div>
           </div>
+
+          {/* Thông tin Tour Privado (Tour riêng) */}
+          {order.tour_type === "privado" && (
+            <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-main)] p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                    <UserRound size={17} />
+                  </div>
+                  <div>
+                    <h2 className="text-[13px] font-bold uppercase tracking-wider text-[var(--text-heading)]">
+                      Thông tin Tour Privado
+                    </h2>
+                    <span className="text-[11px] text-[var(--text-dim)]">
+                      Chi tiết tour riêng dành cho khách hàng
+                    </span>
+                  </div>
+                </div>
+                <TourTypeBadge type="privado" />
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <div className="p-3.5 bg-[var(--bg-body)] rounded-lg border border-[var(--border-subtle)]">
+                  <span className="text-[10px] uppercase font-semibold text-[var(--text-dim)] tracking-wider block mb-1">
+                    Tên tour riêng
+                  </span>
+                  <span className="text-[14px] font-bold text-[var(--text-heading)]">
+                    {order.private_tour_name || "Chưa đặt tên riêng cho tour"}
+                  </span>
+                </div>
+
+                {order.private_tour_pdf_path ? (
+                  <div className="od-pdf-card">
+                    <div className="pdf-file-info">
+                      <div className="pdf-file-icon">
+                        <FileText size={20} />
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <span className="pdf-file-name" title={getFileNameFromPath(order.private_tour_pdf_path)}>
+                          {getFileNameFromPath(order.private_tour_pdf_path)}
+                        </span>
+                        <span className="pdf-file-meta block">
+                          Chương trình tour PDF đính kèm
+                        </span>
+                      </div>
+                    </div>
+                    <div className="pdf-actions">
+                      {pdfSignedUrl ? (
+                        <a
+                          href={pdfSignedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-primary"
+                          style={{ fontSize: "12px", padding: "7px 14px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                        >
+                          <Eye size={14} /> Xem PDF
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
+                          {loadingPdfUrl ? "Đang tạo liên kết an toàn..." : "Không thể tạo liên kết"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-[var(--bg-body)] rounded-lg border border-dashed border-[var(--border-subtle)] text-center text-[12px] text-[var(--text-dim)]">
+                    Chưa tải lên file PDF chương trình tour.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Notes Card */}
           <div className="bg-[var(--bg-card)] rounded-xl border border-[var(--border-main)] p-6 shadow-sm flex flex-col h-full">
@@ -3123,15 +4237,114 @@ function OrderDetail() {
               Thông tin khách hàng
             </h2>
 
-            <div className="flex items-center gap-4 mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
               <div>
                 <span className="text-[11px] text-[var(--text-dim)] uppercase tracking-widest block mb-1">
                   Tên khách hàng
                 </span>
-                <h3 className="text-lg font-bold text-[var(--text-heading)]">
-                  {order.customer_name}
-                </h3>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-bold text-[var(--text-heading)]">
+                    {order.customer_name}
+                  </h3>
+                  {order.customer?.customer_code && (
+                    <span
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: "4px",
+                        background: "rgba(139, 92, 246, 0.12)",
+                        color: "#8b5cf6",
+                        border: "1px solid rgba(139, 92, 246, 0.25)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                      title="Mã định danh khách hàng (Customer ID)"
+                    >
+                      <span>{order.customer.customer_code}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(order.customer!.customer_code);
+                          setCopiedCustomerCode(true);
+                          setTimeout(() => setCopiedCustomerCode(false), 2000);
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "inherit",
+                          cursor: "pointer",
+                          padding: 0,
+                          display: "inline-flex",
+                        }}
+                        title="Sao chép mã khách hàng"
+                      >
+                        {copiedCustomerCode ? (
+                          <CheckCheck size={12} color="#10b981" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                      </button>
+                    </span>
+                  )}
+                </div>
               </div>
+
+              {order.customer_id && (
+                <button
+                  type="button"
+                  onClick={() => openCustomerHistory(order.customer_id!)}
+                  className="btn btn-secondary"
+                  style={{
+                    fontSize: "11px",
+                    padding: "6px 10px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                  }}
+                  title="Xem toàn bộ lịch sử các đợt quay lại của khách hàng"
+                >
+                  <History size={13} />
+                  <span>Lịch sử khách</span>
+                </button>
+              )}
+            </div>
+
+            {/* Return Visit Banner */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "8px 12px",
+                background: "var(--bg-body)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "8px",
+                marginBottom: "12px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <RotateCcw size={13} style={{ color: "#7c3aed" }} />
+                <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>
+                  Đợt quay lại:
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: "5px",
+                  background: (order.return_visit?.visit_number || 1) > 1 ? "rgba(139, 92, 246, 0.15)" : "rgba(37, 99, 235, 0.15)",
+                  color: (order.return_visit?.visit_number || 1) > 1 ? "#7c3aed" : "#2563eb",
+                }}
+              >
+                {(order.return_visit?.visit_number || 1) > 1
+                  ? `Quay lại lần ${(order.return_visit?.visit_number || 1) - 1}`
+                  : "Lần đầu (Khách mới)"}
+              </span>
             </div>
 
             <div className="bg-[var(--bg-body)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
@@ -3206,7 +4419,7 @@ function OrderDetail() {
                 )}
               </div>
 
-              {/* Quốc gia */}
+              {/* Quốc tịch */}
               <div className="flex items-center justify-between p-3.5 border-t border-[var(--border-subtle)] border-dashed transition-colors hover:bg-[var(--bg-hover)]">
                 <div className="flex items-center gap-3 text-[13px] text-[var(--text-main)]">
                   <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 flex items-center justify-center flex-shrink-0">
@@ -3214,23 +4427,51 @@ function OrderDetail() {
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] font-semibold leading-tight">
-                      Quốc gia
+                      Quốc tịch
                     </span>
                     {order.customer_country ? (() => {
                       const countryObj = ALL_COUNTRIES.find(
                         (c) => c.code === order.customer_country
                       );
                       return (
-                        <span className="font-medium flex items-center gap-1.5 mt-0.5">
-                          <span className="text-base leading-none">
-                            {countryObj?.flag || "🌐"}
-                          </span>
+                        <span className="font-medium flex items-center gap-2 mt-0.5">
+                          <CountryFlag code={order.customer_country} size="md" />
                           <span>{countryObj?.name || order.customer_country}</span>
                         </span>
                       );
                     })() : (
                       <span className="italic text-xs text-[var(--text-dim)] opacity-60 mt-0.5">
-                        Chưa cập nhật quốc gia
+                        Chưa cập nhật quốc tịch
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Destino */}
+              <div className="flex items-center justify-between p-3.5 border-t border-[var(--border-subtle)] border-dashed transition-colors hover:bg-[var(--bg-hover)]">
+                <div className="flex items-start gap-3 text-[13px] text-[var(--text-main)] w-full">
+                  <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <MapPin size={14} />
+                  </div>
+                  <div className="flex flex-col flex-1">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--text-dim)] font-semibold leading-tight">
+                      Destino
+                    </span>
+                    {order.destinations && order.destinations.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {order.destinations.map((d) => (
+                          <span
+                            key={d}
+                            className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border border-blue-200 dark:border-blue-700/50"
+                          >
+                            {d}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="italic text-xs text-[var(--text-dim)] opacity-60 mt-0.5">
+                        Chưa có
                       </span>
                     )}
                   </div>
@@ -3295,6 +4536,14 @@ function OrderDetail() {
           </div>
         </div>
       </div>
+
+      {/* Customer History Modal */}
+      <CustomerHistoryModal
+        isOpen={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        data={customerHistoryData}
+        loading={loadingCustomerHistory}
+      />
     </div>
   );
 }
@@ -3636,7 +4885,127 @@ function CustomSourceStatusTooltip({
   return null;
 }
 
+function CustomDepartureMonthTooltip({ active, payload, label }: any) {
+  if (active && payload && payload.length) {
+    const data = payload[0]?.payload;
+    const total = data?.total || 0;
+    const guests = data?.guests || 0;
+
+    return (
+      <div
+        className="saler-chart-tooltip"
+        style={{
+          background: "var(--bg-card, #ffffff)",
+          border: "1px solid var(--border-subtle, #e2e8f0)",
+          boxShadow: "0 12px 28px rgba(0, 0, 0, 0.25)",
+          minWidth: "185px",
+          padding: "10px 12px",
+          borderRadius: "8px",
+          position: "relative",
+          zIndex: 100,
+        }}
+      >
+        <div
+          className="tooltip-header"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "8px",
+          }}
+        >
+          <strong style={{ fontSize: "13px", color: "var(--text-heading)" }}>
+            Tháng {label}
+          </strong>
+          <span
+            style={{
+              fontSize: "11px",
+              color: "var(--text-dim)",
+              fontWeight: 600,
+            }}
+          >
+            {total} đơn · {guests} khách
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+            fontSize: "12px",
+          }}
+        >
+          {data?.new > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                color: "var(--status-new-text)",
+              }}
+            >
+              <span>● Mới:</span>
+              <b>{data.new} đơn</b>
+            </div>
+          )}
+          {data?.consulting > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                color: "var(--status-consulting-text)",
+              }}
+            >
+              <span>● Đang tư vấn:</span>
+              <b>{data.consulting} đơn</b>
+            </div>
+          )}
+          {data?.closed > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                color: "var(--status-closed-text)",
+              }}
+            >
+              <span>● Đã chốt:</span>
+              <b>{data.closed} đơn</b>
+            </div>
+          )}
+          {data?.cancelled > 0 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                color: "var(--status-cancelled-text)",
+              }}
+            >
+              <span>● Đã hủy:</span>
+              <b>{data.cancelled} đơn</b>
+            </div>
+          )}
+        </div>
+        <div
+          style={{
+            marginTop: "8px",
+            paddingTop: "6px",
+            borderTop: "1px dashed var(--border-subtle)",
+            fontSize: "11px",
+            color: "var(--text-dim)",
+            textAlign: "center",
+          }}
+        >
+          Bấm vào cột hoặc nút tháng để xem danh sách khách
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
 function Dashboard() {
+  const navigate = useNavigate();
+  const outletCtx = useOutletContext<{ profile: Profile | null }>() || {};
+  const isAdmin = outletCtx?.profile?.role === "admin";
   const [orders, setOrders] = useState<Order[]>([]);
   const [salers, setSalers] = useState<Profile[]>([]);
   const [selectedSaler, setSelectedSaler] = useState<string>("all");
@@ -3645,6 +5014,7 @@ function Dashboard() {
   const [selectedSource, setSelectedSource] = useState<string>("all");
   const [countryTimeRange, setCountryTimeRange] = useState<string>("all");
   const [countryTopN, setCountryTopN] = useState<string>("5");
+  const [activeDrillMonth, setActiveDrillMonth] = useState<string | null>(null);
 
   function loadDashboardData() {
     supabase
@@ -3853,6 +5223,59 @@ function Dashboard() {
     return Object.values(map).sort((a, b) => (b.new + b.consulting + b.closed + b.cancelled) - (a.new + a.consulting + a.closed + a.cancelled));
   }, [orders]);
 
+  const departureMonthStats = useMemo(() => {
+    const map: Record<
+      string,
+      {
+        month: string;
+        total: number;
+        guests: number;
+        new: number;
+        consulting: number;
+        closed: number;
+        cancelled: number;
+        orders: Order[];
+      }
+    > = {};
+
+    orders.forEach((o) => {
+      const months = parseTourMonths(o.tour_date);
+      months.forEach((m) => {
+        if (!map[m]) {
+          map[m] = {
+            month: m,
+            total: 0,
+            guests: 0,
+            new: 0,
+            consulting: 0,
+            closed: 0,
+            cancelled: 0,
+            orders: [],
+          };
+        }
+        map[m].total += 1;
+        map[m].guests += o.num_guests || 1;
+        map[m][o.status] = (map[m][o.status] || 0) + 1;
+        map[m].orders.push(o);
+      });
+    });
+
+    return Object.values(map).sort((a, b) => {
+      const [mA, yA] = a.month.split("/").map(Number);
+      const [mB, yB] = b.month.split("/").map(Number);
+      return new Date(yA, mA - 1).getTime() - new Date(yB, mB - 1).getTime();
+    });
+  }, [orders]);
+
+  const selectedDrillItem = useMemo(() => {
+    if (!activeDrillMonth) return null;
+    return departureMonthStats.find((item) => item.month === activeDrillMonth) || null;
+  }, [departureMonthStats, activeDrillMonth]);
+
+  const totalDepartureRequests = useMemo(() => {
+    return departureMonthStats.reduce((acc, curr) => acc + curr.total, 0);
+  }, [departureMonthStats]);
+
   const COLORS = ['#38bdf8', '#818cf8', '#c084fc', '#f472b6', '#fb7185', '#fcd34d', '#4ade80', '#94a3b8'];
 
 
@@ -4046,6 +5469,342 @@ function Dashboard() {
               </ResponsiveContainer>
             )}
           </div>
+        </Card>
+      </div>
+
+      {/* Thống kê nhu cầu theo Tháng khởi hành (Thang đo Tháng · Hỗ trợ khách chọn nhiều tháng) */}
+      <div className="dashboard-grid single" style={{ marginTop: "24px" }}>
+        <Card>
+          <div
+            className="card-heading-row"
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "10px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <CalendarDays size={20} style={{ color: "var(--brand-primary, #0ea5e9)" }} />
+                <h2 style={{ margin: 0 }}>Nhu cầu theo Tháng khởi hành</h2>
+              </div>
+              <p style={{ marginTop: "4px" }}>
+                Phân bổ đơn theo các tháng khách dự kiến khởi hành (thang đo Tháng, hỗ trợ khách chọn nhiều tháng).
+              </p>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <span
+                style={{
+                  fontSize: "12px",
+                  padding: "4px 10px",
+                  borderRadius: "20px",
+                  background: "var(--bg-body)",
+                  border: "1px solid var(--border-subtle)",
+                  color: "var(--text-dim)",
+                  fontWeight: 600,
+                }}
+              >
+                Tổng {totalDepartureRequests} lượt yêu cầu tháng · {departureMonthStats.length} tháng ghi nhận
+              </span>
+            </div>
+          </div>
+
+          {/* Month Quick Selectors */}
+          {departureMonthStats.length > 0 && (
+            <div style={{ marginTop: "14px", display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", color: "var(--text-dim)", fontWeight: 600, marginRight: "4px" }}>
+                Chọn nhanh tháng:
+              </span>
+              {departureMonthStats.map((item) => {
+                const isSelected = activeDrillMonth === item.month;
+                return (
+                  <button
+                    key={item.month}
+                    type="button"
+                    onClick={() => setActiveDrillMonth(isSelected ? null : item.month)}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      border: isSelected
+                        ? "1px solid var(--brand-primary, #0ea5e9)"
+                        : "1px solid var(--border-subtle)",
+                      background: isSelected
+                        ? "var(--brand-primary, #0ea5e9)"
+                        : "var(--bg-body)",
+                      color: isSelected ? "#ffffff" : "var(--text-main)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 0.15s ease",
+                    }}
+                    title={`Bấm để xem danh sách khách yêu cầu đi tháng ${item.month}`}
+                  >
+                    <span>{item.month}</span>
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        padding: "1px 6px",
+                        borderRadius: "10px",
+                        background: isSelected
+                          ? "rgba(255,255,255,0.25)"
+                          : "var(--bg-card)",
+                        color: isSelected ? "#ffffff" : "var(--text-dim)",
+                      }}
+                    >
+                      {item.total}
+                    </span>
+                  </button>
+                );
+              })}
+              {activeDrillMonth && (
+                <button
+                  type="button"
+                  onClick={() => setActiveDrillMonth(null)}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--text-dim)",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                  }}
+                >
+                  Bỏ chọn
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Chart Container */}
+          <div style={{ height: "260px", marginTop: "16px" }}>
+            {departureMonthStats.length === 0 ? (
+              <div
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  color: "var(--text-dim)",
+                }}
+              >
+                <CalendarDays size={32} opacity={0.4} />
+                <span style={{ fontSize: "13px" }}>
+                  Chưa có dữ liệu tháng khởi hành từ các đơn tour
+                </span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={departureMonthStats}
+                  margin={{ top: 12, right: 12, left: -20, bottom: 0 }}
+                  onClick={(state) => {
+                    if (state && state.activeLabel) {
+                      setActiveDrillMonth((prev) =>
+                        prev === state.activeLabel ? null : String(state.activeLabel),
+                      );
+                    }
+                  }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="var(--border-subtle)"
+                  />
+                  <XAxis
+                    dataKey="month"
+                    stroke="var(--text-dim)"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={{ stroke: "var(--border-subtle)" }}
+                  />
+                  <YAxis
+                    stroke="var(--text-dim)"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    content={<CustomDepartureMonthTooltip />}
+                    cursor={{ fill: "var(--bg-card-hover)", opacity: 0.4 }}
+                  />
+                  <Legend
+                    iconType="circle"
+                    wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }}
+                  />
+                  <Bar
+                    dataKey="new"
+                    name="Mới"
+                    stackId="monthStack"
+                    fill="var(--status-new-text)"
+                    radius={[0, 0, 0, 0]}
+                    maxBarSize={48}
+                  />
+                  <Bar
+                    dataKey="consulting"
+                    name="Đang tư vấn"
+                    stackId="monthStack"
+                    fill="var(--status-consulting-text)"
+                    radius={[0, 0, 0, 0]}
+                    maxBarSize={48}
+                  />
+                  <Bar
+                    dataKey="closed"
+                    name="Đã chốt"
+                    stackId="monthStack"
+                    fill="var(--status-closed-text)"
+                    radius={[0, 0, 0, 0]}
+                    maxBarSize={48}
+                  />
+                  <Bar
+                    dataKey="cancelled"
+                    name="Đã hủy"
+                    stackId="monthStack"
+                    fill="var(--status-cancelled-text)"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={48}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* Drilldown: Danh sách khách hàng có nhu cầu đi trong tháng đã chọn */}
+          {activeDrillMonth && selectedDrillItem && (
+            <div
+              style={{
+                marginTop: "20px",
+                padding: "16px",
+                background: "var(--bg-body)",
+                borderRadius: "12px",
+                border: "1px solid var(--border-subtle)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "10px",
+                  marginBottom: "14px",
+                }}
+              >
+                <div>
+                  <h3
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      margin: 0,
+                      color: "var(--text-heading)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    <span>Khách hàng có nhu cầu đi trong Tháng {activeDrillMonth}</span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        padding: "2px 8px",
+                        borderRadius: "10px",
+                        background: "var(--brand-primary, #0ea5e9)",
+                        color: "#ffffff",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {selectedDrillItem.total} đơn ({selectedDrillItem.guests} khách)
+                    </span>
+                  </h3>
+                  <p style={{ fontSize: "12px", color: "var(--text-dim)", margin: "3px 0 0" }}>
+                    Danh sách khách hàng đã chọn tháng {activeDrillMonth} làm tháng khởi hành mong muốn.
+                  </p>
+                </div>
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setActiveDrillMonth(null)}
+                    style={{ fontSize: "12px", minHeight: "32px", padding: "4px 10px" }}
+                  >
+                    Đóng chi tiết
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const path = isAdmin ? "/admin/orders" : "/orders";
+                      navigate(`${path}?departureMonth=${encodeURIComponent(activeDrillMonth)}`);
+                    }}
+                    style={{
+                      fontSize: "12px",
+                      minHeight: "32px",
+                      padding: "4px 12px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    Xem tại trang Đơn tour <ChevronRight size={14} />
+                  </Button>
+                </div>
+              </div>
+
+              <div style={{ overflowX: "auto" }}>
+                <table className="settings-table" style={{ fontSize: "12px", width: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: "14%" }}>MÃ ĐƠN</th>
+                      <th style={{ width: "20%" }}>KHÁCH HÀNG</th>
+                      <th style={{ width: "16%" }}>SỐ ĐIỆN THOẠI</th>
+                      <th style={{ width: "24%" }}>SẢN PHẨM ĐÃ GỬI</th>
+                      <th style={{ width: "12%" }}>SỐ KHÁCH</th>
+                      <th style={{ width: "14%" }}>TRẠNG THÁI</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedDrillItem.orders.map((ord) => (
+                      <tr
+                        key={ord.id}
+                        className="clickable-row"
+                        onClick={() => navigate(`/orders/${ord.id}`)}
+                        title="Bấm để xem chi tiết đơn hàng này"
+                      >
+                        <td>
+                          <span style={{ fontWeight: 600, color: "var(--brand-primary, #0ea5e9)" }}>
+                            {ord.order_code}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 600 }}>{ord.customer_name || "—"}</span>
+                        </td>
+                        <td>
+                          <span>{ord.customer_phone || "—"}</span>
+                        </td>
+                        <td>
+                          <b style={{ fontWeight: 500 }} title={ord.tour_name}>
+                            {ord.tour_name}
+                          </b>
+                        </td>
+                        <td>
+                          <span>{ord.num_guests || 1} khách</span>
+                        </td>
+                        <td>
+                          <Badge status={ord.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </Card>
       </div>
 

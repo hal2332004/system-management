@@ -3,17 +3,15 @@ import {
   Camera, 
   Check, 
   Clock, 
-  KeyRound, 
   Mail, 
   ShieldCheck, 
   Trash2, 
   Upload, 
   User, 
-  Sparkles,
-  Bell,
-  Volume2,
-  VolumeX,
-  Play
+  Bell, 
+  Volume2, 
+  VolumeX, 
+  Play 
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Profile } from '../types';
