@@ -83,19 +83,14 @@ export function formatDepartureMonths(val?: string | null): {
   if (months.length === 1) {
     return { primary: months[0], count: 1, all: months, fullText: months[0] };
   }
-  if (months.length === 2) {
-    return {
-      primary: `${months[0]} · ${months[1]}`,
-      count: 2,
-      all: months,
-      fullText: months.join(" · "),
-    };
-  }
+  const start = months[0];
+  const end = months[months.length - 1];
+  const rangeStr = start === end ? start : `${start} -> ${end}`;
   return {
-    primary: `${months[0]} +${months.length - 1}`,
+    primary: rangeStr,
     count: months.length,
     all: months,
-    fullText: months.join(" · "),
+    fullText: rangeStr,
   };
 }
 

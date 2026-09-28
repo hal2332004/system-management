@@ -7,7 +7,6 @@ import type {
   CustomerReturnVisit,
   Customer,
 } from "@/types";
-import { parseTourMonths } from "@/components/MonthMultiSelector";
 
 interface SearchCustomerDbRow {
   id: string;
@@ -138,55 +137,63 @@ export async function createNewCustomerWithFirstVisit(params: {
   return { customer, visit: visitData as CustomerReturnVisit };
 }
 
-export interface OverlapDetectionResult {
-  hasOverlap: boolean;
-  overlappingOrders: CustomerHistoryOrder[];
-  overlappingVisits: CustomerHistoryVisit[];
-  matchingMonths: string[];
+/**
+ * Sắp xếp lại danh sách các đợt quay lại của khách hàng theo thứ tự mới (Atomic, transaction-safe)
+ */
+export async function reorderCustomerVisits(
+  customerId: string,
+  orderedVisitIds: string[]
+): Promise<void> {
+  const { error } = await supabase.rpc("reorder_customer_return_visits", {
+    p_customer_id: customerId,
+    p_ordered_visit_ids: orderedVisitIds,
+  });
+
+  if (error) {
+    console.error("Lỗi khi sắp xếp lại các đợt quay lại:", error);
+    throw new Error(error.message);
+  }
 }
 
 /**
- * Kiểm tra sự trùng lặp tháng khởi hành giữa đơn mới và các đơn trước đó của khách hàng (Requirement 10)
- * Hoàn toàn tất định (deterministic), không dùng AI/LLM
+ * Di chuyển một đơn tour sang một đợt quay lại khác (hoặc gộp đợt)
  */
-export function detectTourDateOverlap(
-  newTourDateStr: string,
-  visits: CustomerHistoryVisit[],
-  excludeOrderId?: string
-): OverlapDetectionResult {
-  const newMonths = parseTourMonths(newTourDateStr);
-  if (newMonths.length === 0) {
-    return {
-      hasOverlap: false,
-      overlappingOrders: [],
-      overlappingVisits: [],
-      matchingMonths: [],
-    };
+export async function moveOrderToVisit(
+  orderId: string,
+  targetVisitId: string,
+  customerId: string
+): Promise<void> {
+  const { error } = await supabase.rpc("move_order_to_visit", {
+    p_order_id: orderId,
+    p_target_visit_id: targetVisitId,
+    p_customer_id: customerId,
+  });
+
+  if (error) {
+    console.error("Lỗi khi chuyển đơn sang đợt khác:", error);
+    throw new Error(error.message);
   }
-
-  const overlappingOrders: CustomerHistoryOrder[] = [];
-  const overlappingVisitsMap = new Map<string, CustomerHistoryVisit>();
-  const matchingMonthsSet = new Set<string>();
-
-  for (const visit of visits) {
-    for (const order of visit.orders) {
-      if (excludeOrderId && order.id === excludeOrderId) continue;
-
-      const orderMonths = parseTourMonths(order.tour_date);
-      const common = newMonths.filter((m) => orderMonths.includes(m));
-
-      if (common.length > 0) {
-        overlappingOrders.push(order);
-        overlappingVisitsMap.set(visit.id, visit);
-        common.forEach((m) => matchingMonthsSet.add(m));
-      }
-    }
-  }
-
-  return {
-    hasOverlap: overlappingOrders.length > 0,
-    overlappingOrders,
-    overlappingVisits: Array.from(overlappingVisitsMap.values()),
-    matchingMonths: Array.from(matchingMonthsSet),
-  };
 }
+
+/**
+ * Tách một đơn tour ra thành một đợt quay lại độc lập mới (ví dụ từ đợt có 2 đơn nhảy ra ngoài)
+ */
+export async function separateOrderToNewVisit(
+  orderId: string,
+  customerId: string,
+  targetPosition?: number
+): Promise<{ success: boolean; new_visit_id: string }> {
+  const { data, error } = await supabase.rpc("separate_order_to_new_visit", {
+    p_order_id: orderId,
+    p_customer_id: customerId,
+    p_target_position: targetPosition || null,
+  });
+
+  if (error) {
+    console.error("Lỗi khi tách đơn thành đợt mới:", error);
+    throw new Error(error.message);
+  }
+
+  return data as { success: boolean; new_visit_id: string };
+}
+

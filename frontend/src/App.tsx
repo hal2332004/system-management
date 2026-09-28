@@ -549,23 +549,14 @@ function AuthPage({ mode }: { mode: "login" | "forgot" }) {
 
   return (
     <main className="auth-shell">
-      <div className="auth-decoration decoration-one" />
-      <div className="auth-decoration decoration-two" />
       <div className="auth-brand">
         <Logo />
-        <span className="secure-label">
-          <Lock size={12} /> Không gian làm việc bảo mật
-        </span>
       </div>
       <Card className="auth-card">
         {mode === "login" ? (
           <>
             <div className="auth-heading">
-              <div className="auth-icon">
-                <ShieldCheck size={22} />
-              </div>
               <h1>Chào mừng trở lại</h1>
-              <p>Đăng nhập để quản lý đơn tour của bạn.</p>
             </div>
             <form onSubmit={submit}>
               <Input
@@ -610,16 +601,10 @@ function AuthPage({ mode }: { mode: "login" | "forgot" }) {
                 <ArrowLeft size={16} className="arrow-right" />
               </Button>
             </form>
-            <div className="auth-foot">
-              Tài khoản được cấp bởi quản trị viên
-            </div>
           </>
         ) : (
           <>
             <div className="auth-heading">
-              <div className="auth-icon">
-                <KeyRound size={22} />
-              </div>
               <h1>Quên mật khẩu?</h1>
               <p>Nhập email công việc để nhận link đặt lại mật khẩu.</p>
             </div>
