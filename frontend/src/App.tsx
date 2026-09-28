@@ -99,7 +99,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { supabase, supabaseAdmin } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 import type {
   ActivityLog,
   Order,
@@ -905,7 +905,7 @@ function AppLayout() {
         }
         const { data } = await supabase
           .from("profiles")
-          .select("*")
+          .select("id, username, display_name, email, role, is_active, avatar_url, created_at, updated_at")
           .eq("id", user.id)
           .maybeSingle();
         const p = data as Profile | null;
@@ -1095,7 +1095,7 @@ function OrdersPage({ admin = false }: { admin?: boolean }) {
     if (admin) {
       const { data: profilesData } = await supabase
         .from("profiles")
-        .select("*")
+        .select("id, username, display_name, email, role, is_active, avatar_url, created_at, updated_at")
         .order("display_name", { ascending: true });
       if (profilesData) setSalers(profilesData as Profile[]);
     }
@@ -2652,8 +2652,8 @@ function OrderForm() {
   useEffect(() => {
     // Tải danh sách tour và dạng phòng được định nghĩa trong Settings
     Promise.all([
-      supabase.from("tours").select("*").order("name"),
-      supabase.from("room_types").select("*").order("name"),
+      supabase.from("tours").select("id, name, is_active").order("name"),
+      supabase.from("room_types").select("id, name, is_active").order("name"),
     ])
       .then(([toursRes, roomTypesRes]) => {
         if (toursRes.data) setTours(toursRes.data as Tour[]);
@@ -2851,20 +2851,11 @@ function OrderForm() {
       }
 
       // Xử lý đợt tương tác / return_visit_id khi sửa đơn
-      let resolvedReturnVisitId = initialVisit?.id || null;
-      if (customerState.targetVisitNumber === 1 || customerState.returnVisitDecision === "same_visit") {
-        resolvedReturnVisitId = customerState.existingVisitId || initialVisit?.id || null;
-      } else if (
-        customerState.returnVisitDecision === "new_visit" &&
-        customerState.selectedCustomer &&
-        customerState.targetVisitNumber > 1
-      ) {
-        const newVisit = await createCustomerReturnVisit(
-          customerState.selectedCustomer.id,
-          `Đơn tour: ${form.tour_name}`
-        );
-        resolvedReturnVisitId = newVisit.id;
-      }
+      const resolvedReturnVisitId =
+        customerState.selectedVisitId ||
+        customerState.existingVisitId ||
+        initialVisit?.id ||
+        null;
 
       const updatePayload = {
         return_visit_id: resolvedReturnVisitId,
@@ -2940,11 +2931,9 @@ function OrderForm() {
             })
             .eq("id", resolvedCustomerId);
 
-          if (
-            customerState.returnVisitDecision === "same_visit" &&
-            customerState.existingVisitId
-          ) {
-            resolvedReturnVisitId = customerState.existingVisitId;
+          if (customerState.selectedVisitId || customerState.existingVisitId) {
+            resolvedReturnVisitId =
+              customerState.selectedVisitId || customerState.existingVisitId;
           } else {
             // Tạo Return Visit mới cho khách
             const newVisit = await createCustomerReturnVisit(
@@ -4995,7 +4984,7 @@ function Dashboard() {
   function loadDashboardData() {
     supabase
       .from("orders")
-      .select("*")
+      .select("id, order_code, owner_id, customer_id, return_visit_id, tour_name, customer_name, customer_phone, customer_email, booking_date, tour_date, status, tour_type, private_tour_name, private_tour_pdf_path, room_type, num_guests, rating, notes, customer_country, destinations, request_source, request_source_other, created_at, updated_at")
       .then(({ data }) => setOrders((data || []) as Order[]));
 
     supabase
@@ -6286,7 +6275,7 @@ function SalersPage() {
   function load() {
     supabase
       .from("profiles")
-      .select("*")
+      .select("id, username, display_name, email, role, is_active, avatar_url, created_at, updated_at")
       .order("created_at", { ascending: false })
       .then(({ data }) => setProfiles((data || []) as Profile[]));
   }
@@ -6386,37 +6375,19 @@ function SalersPage() {
       return;
     }
 
-    // Kiểm tra username đã tồn tại chưa
-    const { data: existing } = await supabaseAdmin
-      .from("profiles")
-      .select("id")
-      .ilike("username", finalUsername)
-      .maybeSingle();
-    if (existing) {
-      setFormError("Username này đã được sử dụng. Vui lòng chọn tên khác.");
+    // Gọi RPC để tạo user
+    const { error: rpcError } = await supabase.rpc("admin_create_saler", {
+      p_email: finalEmail,
+      p_password: finalPassword,
+      p_display_name: finalDisplayName,
+      p_username: finalUsername,
+    });
+
+    if (rpcError) {
+      setFormError(rpcError.message || "Không thể tạo tài khoản.");
       setBusy(false);
       return;
     }
-
-    // Tạo user trên Supabase Auth
-    const { data: createData, error: createError } =
-      await supabaseAdmin.auth.admin.createUser({
-        email: finalEmail,
-        password: finalPassword,
-        email_confirm: true,
-        user_metadata: { full_name: finalDisplayName },
-      });
-    if (createError || !createData?.user) {
-      setFormError(createError?.message || "Không thể tạo tài khoản.");
-      setBusy(false);
-      return;
-    }
-
-    // Cập nhật username vào profiles (trigger đã tạo profile, nhưng username do trigger sinh ngẫu nhiên)
-    await supabaseAdmin
-      .from("profiles")
-      .update({ username: finalUsername })
-      .eq("id", createData.user.id);
 
     setBusy(false);
     closeModal();
@@ -6457,83 +6428,27 @@ function SalersPage() {
       return;
     }
 
-    // Kiểm tra trùng username với người khác
-    if (cleanUsername !== (editingProfile.username || "").toLowerCase()) {
-      const { data: existingUser } = await supabaseAdmin
-        .from("profiles")
-        .select("id")
-        .ilike("username", cleanUsername)
-        .neq("id", editingProfile.id)
-        .maybeSingle();
-      if (existingUser) {
-        setEditFormError("Username này đã được tài khoản khác sử dụng.");
-        setBusy(false);
-        return;
-      }
-    }
-
-    // Kiểm tra trùng email với người khác
-    if (cleanEmail !== editingProfile.email.toLowerCase()) {
-      const { data: existingEmail } = await supabaseAdmin
-        .from("profiles")
-        .select("id")
-        .ilike("email", cleanEmail)
-        .neq("id", editingProfile.id)
-        .maybeSingle();
-      if (existingEmail) {
-        setEditFormError("Email này đã được tài khoản khác sử dụng.");
-        setBusy(false);
-        return;
-      }
-    }
-
-    // Cập nhật Supabase Auth
-    const authPayload: {
-      email?: string;
-      password?: string;
-      user_metadata?: { full_name: string };
-    } = {
-      user_metadata: { full_name: cleanDisplayName },
+    const payload: any = {
+      p_user_id: editingProfile.id,
+      p_email: cleanEmail,
+      p_display_name: cleanDisplayName,
+      p_username: cleanUsername,
+      p_role: editForm.role,
     };
-    if (cleanEmail !== editingProfile.email.toLowerCase()) {
-      authPayload.email = cleanEmail;
-    }
+
     if (editForm.password && editForm.password.trim().length > 0) {
       if (editForm.password.length < 6) {
         setEditFormError("Mật khẩu mới cần tối thiểu 6 ký tự.");
         setBusy(false);
         return;
       }
-      authPayload.password = editForm.password;
+      payload.p_password = editForm.password;
     }
 
-    const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-      editingProfile.id,
-      authPayload,
-    );
-    if (authError) {
-      setEditFormError(
-        authError.message || "Không thể cập nhật tài khoản Auth.",
-      );
-      setBusy(false);
-      return;
-    }
+    const { error: rpcError } = await supabase.rpc("admin_update_saler", payload);
 
-    // Cập nhật bảng profiles
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .update({
-        display_name: cleanDisplayName,
-        username: cleanUsername,
-        email: cleanEmail,
-        role: editForm.role,
-      })
-      .eq("id", editingProfile.id);
-
-    if (profileError) {
-      setEditFormError(
-        profileError.message || "Không thể cập nhật hồ sơ nhân viên.",
-      );
+    if (rpcError) {
+      setEditFormError(rpcError.message || "Không thể cập nhật hồ sơ nhân viên.");
       setBusy(false);
       return;
     }
@@ -6547,24 +6462,14 @@ function SalersPage() {
     if (profile.role === "admin") return;
     const nextActive = !profile.is_active;
 
-    // 1. Cập nhật bảng profiles dùng supabaseAdmin để đảm bảo quyền
-    const { error: profileError } = await supabaseAdmin
-      .from("profiles")
-      .update({ is_active: nextActive })
-      .eq("id", profile.id);
+    const { error: rpcError } = await supabase.rpc("admin_toggle_saler_active", {
+      p_user_id: profile.id,
+      p_is_active: nextActive,
+    });
 
-    if (profileError) {
-      alert("Không thể cập nhật trạng thái: " + profileError.message);
+    if (rpcError) {
+      alert("Không thể cập nhật trạng thái: " + rpcError.message);
       return;
-    }
-
-    // 2. Đồng bộ trạng thái khóa/mở khóa tới Supabase Auth
-    try {
-      await supabaseAdmin.auth.admin.updateUserById(profile.id, {
-        ban_duration: nextActive ? "none" : "876600h",
-      });
-    } catch (err) {
-      console.error("Không thể đồng bộ trạng thái ban tới Supabase Auth:", err);
     }
 
     setOpenMenu(null);

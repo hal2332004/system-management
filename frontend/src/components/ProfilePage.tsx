@@ -84,7 +84,7 @@ export function ProfilePage({ profile, onProfileUpdated }: ProfilePageProps) {
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id)
-        .select('*')
+        .select('id, username, display_name, email, role, is_active, avatar_url, created_at, updated_at')
         .single();
 
       if (error) throw error;
@@ -251,7 +251,7 @@ async function deleteOldAvatarsFromStorage(userId: string, keepFilePath?: string
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id)
-        .select('*')
+        .select('id, username, display_name, email, role, is_active, avatar_url, created_at, updated_at')
         .single();
 
       if (dbError) throw dbError;
@@ -289,7 +289,7 @@ async function deleteOldAvatarsFromStorage(userId: string, keepFilePath?: string
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id)
-        .select('*')
+        .select('id, username, display_name, email, role, is_active, avatar_url, created_at, updated_at')
         .single();
 
       if (dbError) throw dbError;

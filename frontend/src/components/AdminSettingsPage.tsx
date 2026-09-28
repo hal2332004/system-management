@@ -44,8 +44,8 @@ export function AdminSettingsPage() {
     setLoading(true);
     try {
       const [toursRes, roomTypesRes] = await Promise.all([
-        supabase.from('tours').select('*').order('name', { ascending: true }),
-        supabase.from('room_types').select('*').order('name', { ascending: true }),
+        supabase.from('tours').select('id, name, is_active, created_at, updated_at').order('name', { ascending: true }),
+        supabase.from('room_types').select('id, name, is_active, created_at, updated_at').order('name', { ascending: true }),
       ]);
 
       if (toursRes.error) throw toursRes.error;
@@ -87,7 +87,7 @@ export function AdminSettingsPage() {
       const { data, error } = await supabase
         .from('tours')
         .insert({ name: trimmed, is_active: true })
-        .select('*')
+        .select('id, name, is_active, created_at, updated_at')
         .single();
 
       if (error) throw error;
@@ -181,7 +181,7 @@ export function AdminSettingsPage() {
       const { data, error } = await supabase
         .from('room_types')
         .insert({ name: trimmed, is_active: true })
-        .select('*')
+        .select('id, name, is_active, created_at, updated_at')
         .single();
 
       if (error) throw error;
